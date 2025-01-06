@@ -1,3 +1,4 @@
 [submodule "dep/SenseVoice.cpp"]
 	path = dep/SenseVoice.cpp
 	url = https://github.com/hewenyu/SenseVoice.cpp.git
+	branch = dep
