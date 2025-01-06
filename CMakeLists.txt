@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.10)
 project(voice_assistant VERSION 1.0)
 
+# Set policy to allow linking to targets in subdirectories
+cmake_policy(SET CMP0079 NEW)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -20,6 +23,10 @@ add_subdirectory(dep/SenseVoice.cpp/sense-voice/csrc/third-party/ggml EXCLUDE_FR
 
 # 添加SenseVoice
 add_subdirectory(dep/SenseVoice.cpp/sense-voice)
+
+# Ensure pthread is linked for sense-voice-core and sense-voice-main
+target_link_libraries(sense-voice-core PUBLIC pthread)
+target_link_libraries(sense-voice-main PRIVATE pthread)
 
 # 查找必要的包
 find_package(Threads REQUIRED)
