@@ -20,12 +20,11 @@ int main(int argc, char* argv[]) {
         std::string host = "0.0.0.0";
         int port = 8080;
         
-        // 获取可执行文件所在目录
-        fs::path exe_path = fs::absolute(argv[0]);
-        fs::path workspace_path = exe_path.parent_path().parent_path();
+        // 获取当前工作目录
+        fs::path current_path = fs::current_path();
         
         // 设置默认模型路径
-        fs::path model_path = workspace_path / "models" / "sense-voice-small-fp16.gguf";
+        fs::path model_path = current_path / "models" / "sense-voice-small-fp16.gguf";
 
         // 解析命令行参数
         for (int i = 1; i < argc; i++) {
@@ -59,7 +58,7 @@ int main(int argc, char* argv[]) {
             }
         }
         if (const char* env_model = std::getenv("MODEL_PATH")) {
-            if (model_path == workspace_path / "models" / "sense-voice-small-fp16.gguf") {
+            if (model_path == current_path / "models" / "sense-voice-small-fp16.gguf") {
                 model_path = env_model;
             }
         }

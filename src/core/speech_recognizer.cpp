@@ -9,20 +9,33 @@
 namespace voice_assistant {
 
 SpeechRecognizer::SpeechRecognizer() 
-    : context_(nullptr), initialized_(false), state_(RecognitionState::IDLE) {}
+    : context_(nullptr), initialized_(false), state_(RecognitionState::IDLE) {
+    std::cout << "SpeechRecognizer constructor called" << std::endl;
+}
 
 SpeechRecognizer::~SpeechRecognizer() {
-    if (context_ && context_->state) {
-        sense_voice_free_state(context_->state);
+    std::cout << "SpeechRecognizer destructor called" << std::endl;
+    if (context_) {
+        std::cout << "Freeing context resources" << std::endl;
+        if (context_->state) {
+            std::cout << "Freeing state" << std::endl;
+            sense_voice_free_state(context_->state);
+            context_->state = nullptr;
+        }
+        // TODO: 需要添加 sense_voice_free_context 函数
         context_ = nullptr;
     }
 }
 
 bool SpeechRecognizer::initialize(const std::string& model_path) {
     try {
+        std::cout << "Initializing speech recognizer with model: " << model_path << std::endl;
+
         if (context_) {
+            std::cout << "Cleaning up existing context" << std::endl;
             if (context_->state) {
                 sense_voice_free_state(context_->state);
+                context_->state = nullptr;
             }
             context_ = nullptr;
         }
@@ -30,6 +43,9 @@ bool SpeechRecognizer::initialize(const std::string& model_path) {
         auto params = sense_voice_context_default_params();
         params.use_gpu = true;  // 启用GPU加速
         
+        std::cout << "Creating context with params (use_gpu=" << params.use_gpu << ")" << std::endl;
+        
+        // 使用正确的初始化函数
         context_ = sense_voice_init_with_params_no_state(
             model_path.c_str(),
             params
@@ -39,9 +55,40 @@ bool SpeechRecognizer::initialize(const std::string& model_path) {
             std::cerr << "Failed to initialize sense_voice context" << std::endl;
             return false;
         }
-        
+
+        std::cout << "Context created successfully" << std::endl;
+
+        // 验证上下文状态
+        if (!context_->model.ctx) {
+            std::cerr << "Model context is null" << std::endl;
+            return false;
+        }
+
+        std::cout << "Model context verified" << std::endl;
+
+        // 验证模型是否正确加载
+        if (!context_->model.buffer) {
+            std::cerr << "Model buffer is null" << std::endl;
+            return false;
+        }
+
+        std::cout << "Model buffer verified" << std::endl;
+
+        // 初始化状态
+        context_->state = new sense_voice_state();
+        if (!context_->state) {
+            std::cerr << "Failed to allocate state" << std::endl;
+            return false;
+        }
+
+        // 初始化状态成员
+        context_->state->result_all.clear();
+
+        std::cout << "State initialized" << std::endl;
+
         initialized_ = true;
         state_ = RecognitionState::IDLE;
+        std::cout << "Speech recognizer initialized successfully" << std::endl;
         return true;
     } catch (const std::exception& e) {
         std::cerr << "Error initializing recognizer: " << e.what() << std::endl;
@@ -59,10 +106,18 @@ RecognitionResult SpeechRecognizer::process_recognition(
         throw std::runtime_error("Recognizer not initialized");
     }
 
+    if (!context_->state) {
+        throw std::runtime_error("Recognizer state not initialized");
+    }
+
     try {
+        std::cout << "Processing recognition request" << std::endl;
+        
         // 设置识别参数
         sense_voice_full_params params = sense_voice_full_default_params(SENSE_VOICE_SAMPLING_GREEDY);
         params.language = config.language_code.c_str();
+        
+        std::cout << "Converting audio data format" << std::endl;
         
         // 将 float 转换为 double
         std::vector<double> samples;
@@ -71,6 +126,15 @@ RecognitionResult SpeechRecognizer::process_recognition(
             samples.push_back(static_cast<double>(sample));
         }
 
+        std::cout << "Clearing previous results" << std::endl;
+        
+        // 清除之前的结果
+        if (context_->state) {
+            context_->state->result_all.clear();
+        }
+
+        std::cout << "Running speech recognition" << std::endl;
+        
         // 执行语音识别
         int result = sense_voice_full_parallel(
             context_,
@@ -84,9 +148,11 @@ RecognitionResult SpeechRecognizer::process_recognition(
             throw std::runtime_error("Failed to perform speech recognition");
         }
 
+        std::cout << "Processing recognition results" << std::endl;
+        
         // 获取识别结果
         RecognitionResult recognition_result;
-        if (!context_->state->result_all.empty()) {
+        if (context_->state && !context_->state->result_all.empty()) {
             const auto& segment = context_->state->result_all[0];
             recognition_result.transcript = segment.text;
             recognition_result.confidence = 1.0;
@@ -102,8 +168,10 @@ RecognitionResult SpeechRecognizer::process_recognition(
             recognition_result.end_time = 0.0;
         }
 
+        std::cout << "Recognition completed successfully" << std::endl;
         return recognition_result;
     } catch (const std::exception& e) {
+        std::cerr << "Recognition failed: " << e.what() << std::endl;
         throw std::runtime_error(std::string("Speech recognition failed: ") + e.what());
     }
 }
