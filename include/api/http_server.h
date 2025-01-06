@@ -9,33 +9,29 @@ namespace voice_assistant {
 
 class HttpServer {
 public:
-    HttpServer(const std::string& host = "0.0.0.0", int port = 8080);
+    HttpServer(const std::string& host, int port);
     ~HttpServer();
 
-    // 初始化服务器
     bool initialize(const std::string& model_path);
-
-    // 启动服务器
     void run();
 
 private:
-    // HTTP服务器实例
-    std::unique_ptr<httplib::Server> server_;
-    // 语音识别器实例
-    std::unique_ptr<SpeechRecognizer> recognizer_;
-
-    // API路由处理函数
     void setup_routes();
-    void handle_recognize(const httplib::Request& req, httplib::Response& res);
     void handle_health_check(const httplib::Request& req, httplib::Response& res);
-
-    // 工具函数
-    bool parse_multipart_form_data(const httplib::Request& req, 
-                                 std::string& audio_data,
-                                 RecognitionConfig& config);
+    void handle_recognize(const httplib::Request& req, httplib::Response& res);
+    void handle_long_running_recognize(const httplib::Request& req, httplib::Response& res);
     
-    // Base64解码
+    bool parse_multipart_form_data(
+        const httplib::Request& req,
+        std::string& audio_data,
+        RecognitionConfig& config);
+    
     std::string base64_decode(const std::string& encoded);
+    std::string generate_operation_id();
+    std::string current_timestamp();
+
+    std::unique_ptr<httplib::Server> server_;
+    std::unique_ptr<SpeechRecognizer> recognizer_;
 };
 
 } // namespace voice_assistant 

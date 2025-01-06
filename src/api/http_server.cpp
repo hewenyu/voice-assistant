@@ -3,6 +3,7 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <chrono>
 
 using json = nlohmann::json;
 
@@ -41,15 +42,7 @@ void HttpServer::setup_routes() {
 
     // 长语音识别接口
     server_->Post("/v1/speech:longrunningrecognize", [this](const httplib::Request& req, httplib::Response& res) {
-        // TODO: 实现长语音识别
-        json error = {
-            {"error", {
-                {"code", 501},
-                {"message", "Long running recognition not implemented yet"}
-            }}
-        };
-        res.status = 501;
-        res.set_content(error.dump(), "application/json");
+        handle_long_running_recognize(req, res);
     });
 }
 
@@ -128,24 +121,76 @@ void HttpServer::handle_recognize(const httplib::Request& req, httplib::Response
         }
 
         // 执行识别
-        auto result = recognizer_->recognize_file(temp_path, config);
+        auto result = recognizer_->recognize_sync(temp_path, config);
 
         // 删除临时文件
         std::remove(temp_path);
 
         // 构造Google Speech-to-Text API格式的响应
-        json response = {
-            {"results", {
+        json response;
+        response["results"] = json::array();
+        response["results"].push_back({
+            {"alternatives", json::array({
                 {
-                    {"alternatives", {
-                        {
-                            {"transcript", result.transcript},
-                            {"confidence", result.confidence}
-                        }
-                    }},
-                    {"languageCode", config.language_code}
+                    {"transcript", result.transcript},
+                    {"confidence", result.confidence}
                 }
+            })},
+            {"languageCode", config.language_code},
+            {"resultEndTime", {
+                {"seconds", static_cast<int64_t>(result.end_time)},
+                {"nanos", static_cast<int32_t>((result.end_time - static_cast<int64_t>(result.end_time)) * 1e9)}
             }}
+        });
+
+        res.set_content(response.dump(), "application/json");
+
+    } catch (const std::exception& e) {
+        json error = {
+            {"error", {
+                {"code", 400},
+                {"message", e.what()},
+                {"status", "INVALID_ARGUMENT"}
+            }}
+        };
+        res.status = 400;
+        res.set_content(error.dump(), "application/json");
+    }
+}
+
+void HttpServer::handle_long_running_recognize(const httplib::Request& req, httplib::Response& res) {
+    try {
+        // 解析请求和配置，与同步识别相同
+        if (!req.has_header("Content-Type")) {
+            throw std::runtime_error("Missing Content-Type header");
+        }
+
+        std::string content_type = req.get_header_value("Content-Type");
+        json request_json;
+        RecognitionConfig config;
+        std::string audio_data;
+
+        if (content_type == "application/json") {
+            request_json = json::parse(req.body);
+            // ... 解析配置和音频数据，与同步识别相同 ...
+        }
+
+        // 启动异步识别
+        auto future = recognizer_->recognize_async(audio_data, config);
+
+        // 生成操作ID
+        std::string operation_id = generate_operation_id();
+
+        // 返回长时间运行操作的响应
+        json response = {
+            {"name", "operations/" + operation_id},
+            {"metadata", {
+                {"@type", "type.googleapis.com/google.cloud.speech.v1.LongRunningRecognizeMetadata"},
+                {"progressPercent", 0},
+                {"startTime", current_timestamp()},
+                {"lastUpdateTime", current_timestamp()}
+            }},
+            {"done", false}
         };
 
         res.set_content(response.dump(), "application/json");
@@ -211,7 +256,6 @@ bool HttpServer::parse_multipart_form_data(
     return found_audio;  // Config is optional
 }
 
-// Base64解码函数
 std::string HttpServer::base64_decode(const std::string& encoded) {
     static const std::string base64_chars = 
         "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -237,6 +281,26 @@ std::string HttpServer::base64_decode(const std::string& encoded) {
         }
     }
     return decoded;
+}
+
+std::string HttpServer::generate_operation_id() {
+    // 生成唯一的操作ID
+    static int counter = 0;
+    auto now = std::chrono::system_clock::now();
+    auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+        now.time_since_epoch()
+    ).count();
+    
+    return "voice-" + std::to_string(timestamp) + "-" + std::to_string(++counter);
+}
+
+std::string HttpServer::current_timestamp() {
+    auto now = std::chrono::system_clock::now();
+    auto timestamp = std::chrono::duration_cast<std::chrono::seconds>(
+        now.time_since_epoch()
+    ).count();
+    
+    return std::to_string(timestamp);
 }
 
 } // namespace voice_assistant 

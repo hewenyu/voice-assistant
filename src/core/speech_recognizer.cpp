@@ -2,10 +2,14 @@
 #include <stdexcept>
 #include <sndfile.h>
 #include <iostream>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 
 namespace voice_assistant {
 
-SpeechRecognizer::SpeechRecognizer() : context_(nullptr), initialized_(false) {}
+SpeechRecognizer::SpeechRecognizer() 
+    : context_(nullptr), initialized_(false), state_(RecognitionState::IDLE) {}
 
 SpeechRecognizer::~SpeechRecognizer() {
     if (context_ && context_->state) {
@@ -23,7 +27,6 @@ bool SpeechRecognizer::initialize(const std::string& model_path) {
             context_ = nullptr;
         }
 
-        // 初始化 SenseVoice 模型
         auto params = sense_voice_context_default_params();
         params.use_gpu = true;  // 启用GPU加速
         
@@ -38,27 +41,17 @@ bool SpeechRecognizer::initialize(const std::string& model_path) {
         }
         
         initialized_ = true;
+        state_ = RecognitionState::IDLE;
         return true;
     } catch (const std::exception& e) {
         std::cerr << "Error initializing recognizer: " << e.what() << std::endl;
+        state_ = RecognitionState::ERROR;
         return false;
     }
 }
 
-RecognitionResult SpeechRecognizer::recognize_file(
-    const std::string& audio_path,
-    const RecognitionConfig& config) {
-    
-    if (!initialized_) {
-        throw std::runtime_error("Recognizer not initialized");
-    }
-
-    // 预处理音频
-    auto audio_data = preprocess_audio(audio_path);
-    return recognize_audio(audio_data, config);
-}
-
-RecognitionResult SpeechRecognizer::recognize_audio(
+// 内部处理方法
+RecognitionResult SpeechRecognizer::process_recognition(
     const std::vector<float>& audio_data,
     const RecognitionConfig& config) {
     
@@ -96,17 +89,139 @@ RecognitionResult SpeechRecognizer::recognize_audio(
         if (!context_->state->result_all.empty()) {
             const auto& segment = context_->state->result_all[0];
             recognition_result.transcript = segment.text;
-            // 由于 API 没有提供置信度，我们暂时设置为 1.0
             recognition_result.confidence = 1.0;
+            recognition_result.is_final = true;
+            recognition_result.start_time = segment.t0;
+            recognition_result.end_time = segment.t1;
+            // TODO: 实现分词功能
         } else {
             recognition_result.transcript = "";
             recognition_result.confidence = 0.0;
+            recognition_result.is_final = true;
+            recognition_result.start_time = 0.0;
+            recognition_result.end_time = 0.0;
         }
 
         return recognition_result;
     } catch (const std::exception& e) {
         throw std::runtime_error(std::string("Speech recognition failed: ") + e.what());
     }
+}
+
+// 同步识别实现
+RecognitionResult SpeechRecognizer::recognize_sync(
+    const std::string& audio_path,
+    const RecognitionConfig& config) {
+    
+    if (!initialized_) {
+        throw std::runtime_error("Recognizer not initialized");
+    }
+
+    state_ = RecognitionState::RECOGNIZING;
+    auto audio_data = preprocess_audio(audio_path);
+    auto result = process_recognition(audio_data, config);
+    state_ = RecognitionState::FINISHED;
+    return result;
+}
+
+RecognitionResult SpeechRecognizer::recognize_sync(
+    const std::vector<float>& audio_data,
+    const RecognitionConfig& config) {
+    
+    if (!initialized_) {
+        throw std::runtime_error("Recognizer not initialized");
+    }
+
+    state_ = RecognitionState::RECOGNIZING;
+    auto result = process_recognition(audio_data, config);
+    state_ = RecognitionState::FINISHED;
+    return result;
+}
+
+// 异步识别实现
+std::future<RecognitionResult> SpeechRecognizer::recognize_async(
+    const std::string& audio_path,
+    const RecognitionConfig& config) {
+    
+    return std::async(std::launch::async, [this, audio_path, config]() {
+        return recognize_sync(audio_path, config);
+    });
+}
+
+std::future<RecognitionResult> SpeechRecognizer::recognize_async(
+    const std::vector<float>& audio_data,
+    const RecognitionConfig& config) {
+    
+    return std::async(std::launch::async, [this, audio_data, config]() {
+        return recognize_sync(audio_data, config);
+    });
+}
+
+// 流式识别实现
+bool SpeechRecognizer::start_streaming(
+    const RecognitionConfig& config,
+    StreamingRecognitionCallback callback) {
+    
+    if (!initialized_ || is_streaming_) {
+        return false;
+    }
+
+    is_streaming_ = true;
+    streaming_callback_ = callback;
+    audio_buffer_.clear();
+    state_ = RecognitionState::RECOGNIZING;
+    return true;
+}
+
+bool SpeechRecognizer::feed_audio(const std::vector<float>& audio_chunk) {
+    if (!is_streaming_) {
+        return false;
+    }
+
+    // 添加新的音频数据到缓冲区
+    audio_buffer_.insert(audio_buffer_.end(), audio_chunk.begin(), audio_chunk.end());
+
+    // 如果累积了足够的数据，进行识别
+    if (audio_buffer_.size() >= 16000) {  // 假设采样率为16kHz，处理1秒的数据
+        try {
+            RecognitionConfig config;
+            auto result = process_recognition(audio_buffer_, config);
+            if (streaming_callback_) {
+                streaming_callback_(result);
+            }
+            audio_buffer_.clear();
+        } catch (const std::exception& e) {
+            std::cerr << "Streaming recognition error: " << e.what() << std::endl;
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool SpeechRecognizer::stop_streaming() {
+    if (!is_streaming_) {
+        return false;
+    }
+
+    // 处理剩余的音频数据
+    if (!audio_buffer_.empty()) {
+        try {
+            RecognitionConfig config;
+            auto result = process_recognition(audio_buffer_, config);
+            if (streaming_callback_) {
+                streaming_callback_(result);
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "Final streaming recognition error: " << e.what() << std::endl;
+        }
+    }
+
+    is_streaming_ = false;
+    streaming_callback_ = nullptr;
+    audio_buffer_.clear();
+    state_ = RecognitionState::IDLE;
+    return true;
 }
 
 std::vector<float> SpeechRecognizer::preprocess_audio(const std::string& audio_path) {
