@@ -5,6 +5,10 @@
 #include <vector>
 #include "sense-voice.h"
 
+// 避免宏冲突
+#undef MIN
+#undef MAX
+
 namespace voice_assistant {
 
 struct RecognitionConfig {
@@ -38,7 +42,7 @@ public:
 
 private:
     // SenseVoice模型实例
-    std::unique_ptr<sense_voice::SenseVoice> model_;
+    struct sense_voice_context* context_;
     bool initialized_ = false;
 
     // 音频预处理

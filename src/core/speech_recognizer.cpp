@@ -4,14 +4,29 @@
 
 namespace voice_assistant {
 
-SpeechRecognizer::SpeechRecognizer() = default;
-SpeechRecognizer::~SpeechRecognizer() = default;
+SpeechRecognizer::SpeechRecognizer() : context_(nullptr), initialized_(false) {}
+
+SpeechRecognizer::~SpeechRecognizer() {
+    if (context_) {
+        // TODO: 添加适当的清理函数
+        context_ = nullptr;
+    }
+}
 
 bool SpeechRecognizer::initialize(const std::string& model_path) {
     try {
         // 初始化 SenseVoice 模型
-        model_ = std::make_unique<sense_voice::SenseVoice>();
-        // TODO: 设置模型参数并加载
+        auto params = sense_voice_context_default_params();
+        
+        context_ = sense_voice_init_with_params_no_state(
+            model_path.c_str(),
+            params
+        );
+        
+        if (!context_) {
+            return false;
+        }
+        
         initialized_ = true;
         return true;
     } catch (const std::exception& e) {
@@ -41,10 +56,29 @@ RecognitionResult SpeechRecognizer::recognize_audio(
         throw std::runtime_error("Recognizer not initialized");
     }
 
-    // TODO: 调用 SenseVoice 进行识别
-    // 目前返回示例结果
+    // 转换为double类型
+    std::vector<double> samples(audio_data.begin(), audio_data.end());
+
+    // 设置识别参数
+    sense_voice_full_params params;
+    params.language = config.language_code.c_str();
+    
+    // 执行识别
+    int result = sense_voice_full_parallel(
+        context_,
+        params,
+        samples,
+        samples.size(),
+        4  // 使用4个处理器
+    );
+
+    if (result != 0) {
+        throw std::runtime_error("Recognition failed");
+    }
+
+    // TODO: 从context中获取识别结果
     return RecognitionResult{
-        .transcript = "示例转录文本",
+        .transcript = "示例转录文本",  // 需要从context中获取实际结果
         .confidence = 0.95f
     };
 }

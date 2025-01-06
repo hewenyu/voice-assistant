@@ -5,11 +5,20 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# 添加依赖的子模块
+# 设置输出目录
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+
+# 添加SenseVoice.cpp
+set(BUILD_SHARED_LIBS ON)
+set(SENSEVOICE_BUILD_TESTS OFF)
+set(SENSEVOICE_BUILD_EXAMPLES OFF)
 add_subdirectory(dep/SenseVoice.cpp)
 
 # 查找必要的包
 find_package(Threads REQUIRED)
+find_package(OpenMP REQUIRED)
 
 # 添加cpp-httplib
 include(FetchContent)
@@ -24,6 +33,8 @@ FetchContent_MakeAvailable(httplib)
 include_directories(
     ${PROJECT_SOURCE_DIR}/include
     ${PROJECT_SOURCE_DIR}/dep/SenseVoice.cpp/sense-voice/csrc
+    ${PROJECT_SOURCE_DIR}/dep/SenseVoice.cpp/sense-voice/csrc/third-party/ggml/include
+    ${PROJECT_SOURCE_DIR}/dep/SenseVoice.cpp/sense-voice/csrc/third-party/ggml/src
     ${httplib_SOURCE_DIR}
 )
 
@@ -40,6 +51,8 @@ add_executable(voice_assistant ${SOURCES})
 target_link_libraries(voice_assistant
     PRIVATE
     Threads::Threads
-    sense-voice
+    OpenMP::OpenMP_CXX
+    sense-voice-cpp
     httplib
+    sndfile
 ) 

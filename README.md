@@ -25,7 +25,7 @@
 ```bash
 git clone <repository-url>
 cd voice-assistant
-git submodule update --init --recursive
+git submodule sync && git submodule update --init --recursive
 ```
 
 2. 安装依赖：
