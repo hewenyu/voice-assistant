@@ -40,7 +40,7 @@ bool SpeechRecognizer::initialize(const std::string& model_path) {
         
         std::cout << "Debug: Creating context..." << std::endl;
         // 创建新的上下文
-        context_ = sense_voice_init_with_params_no_state(model_path.c_str(), params);
+        context_ = sense_voice_small_init_from_file_with_params(model_path.c_str(), params);
         if (!context_) {
             std::cerr << "Failed to create sense_voice_context" << std::endl;
             return false;
@@ -89,19 +89,12 @@ bool SpeechRecognizer::initialize(const std::string& model_path) {
             std::cout << "Debug: Number of encoder layers: " << context_->model.hparams.n_encoder_layers << std::endl;
         }
 
-        std::cout << "Debug: Creating state..." << std::endl;
-        // 初始化状态
-        context_->state = new sense_voice_state();
+        std::cout << "Debug: Checking state..." << std::endl;
         if (!context_->state) {
-            std::cerr << "Failed to allocate state" << std::endl;
-            return false;
+            std::cerr << "Warning: State is null" << std::endl;
+        } else {
+            std::cout << "Debug: State OK" << std::endl;
         }
-        std::cout << "Debug: State created successfully" << std::endl;
-
-        std::cout << "Debug: Initializing state members..." << std::endl;
-        // 初始化状态成员
-        context_->state->result_all.clear();
-        std::cout << "Debug: State members initialized" << std::endl;
 
         std::cout << "Model loaded successfully" << std::endl;
         initialized_ = true;
@@ -128,7 +121,7 @@ RecognitionResult SpeechRecognizer::process_recognition(
         // 设置识别参数
         sense_voice_full_params params = sense_voice_full_default_params(SENSE_VOICE_SAMPLING_GREEDY);
         params.language = config.language_code.c_str();
-        params.n_threads = 4;  // 使用4个线程
+        params.n_threads = 1;  // 使用单线程模式
         
         // 转换音频数据为double类型
         std::vector<double> samples;
@@ -136,18 +129,34 @@ RecognitionResult SpeechRecognizer::process_recognition(
         for (float sample : audio_data) {
             samples.push_back(static_cast<double>(sample));
         }
+
+        // 确保状态已初始化
+        if (!context_->state) {
+            // 使用 small 模型的初始化函数
+            auto temp_ctx = sense_voice_small_init_from_file_with_params(context_->path_model.c_str(), context_->params);
+            if (!temp_ctx || !temp_ctx->state) {
+                throw std::runtime_error("Failed to initialize state");
+            }
+            // 复制状态
+            context_->state = temp_ctx->state;
+            temp_ctx->state = nullptr;  // 防止被释放
+            delete temp_ctx;  // 只删除上下文，不删除状态
+        }
         
-        // 执行识别
+        // 清空之前的结果
+        context_->state->result_all.clear();
+        
+        // 执行识别 (使用并行模式，但只用一个处理器)
         int result = sense_voice_full_parallel(
             context_,
             params,
             samples,
             samples.size(),
-            4  // n_processors
+            1  // 只使用一个处理器
         );
 
         if (result != 0) {
-            throw std::runtime_error("Recognition failed");
+            throw std::runtime_error("Recognition failed with error code: " + std::to_string(result));
         }
 
         // 获取结果
