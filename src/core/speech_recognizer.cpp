@@ -5,6 +5,7 @@
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+#include <fstream>
 
 namespace voice_assistant {
 
@@ -13,71 +14,103 @@ SpeechRecognizer::SpeechRecognizer()
 
 SpeechRecognizer::~SpeechRecognizer() {
     if (context_) {
-        if (context_->state) {
-            sense_voice_free_state(context_->state);
-            context_->state = nullptr;
-        }
-        // 释放context本身
-        // TODO: 需要添加 sense_voice_free_context 函数
+        sense_voice_free_state(context_->state);
         context_ = nullptr;
     }
 }
 
 bool SpeechRecognizer::initialize(const std::string& model_path) {
     try {
-        if (context_) {
-            if (context_->state) {
-                sense_voice_free_state(context_->state);
-                context_->state = nullptr;
-            }
-            context_ = nullptr;
-        }
-
         std::cout << "Initializing speech recognizer with model: " << model_path << std::endl;
+        
+        // 检查模型文件是否存在
+        std::ifstream model_file(model_path, std::ios::binary);
+        if (!model_file.good()) {
+            std::cerr << "Model file not found: " << model_path << std::endl;
+            return false;
+        }
+        model_file.close();
 
-        auto params = sense_voice_context_default_params();
-        params.use_gpu = false;  // 禁用GPU加速，使用CPU模式
+        std::cout << "Debug: Setting up context parameters..." << std::endl;
+        // 初始化上下文参数
+        sense_voice_context_params params = sense_voice_context_default_params();
+        params.use_gpu = false;  // 暂时禁用GPU，看看是否是GPU相关的问题
+        params.flash_attn = false;  // 不使用 flash attention
+        params.gpu_device = 0;  // 使用第一个 GPU 设备
         
-        // 初始化上下文
-        context_ = sense_voice_init_with_params_no_state(
-            model_path.c_str(),
-            params
-        );
-        
+        std::cout << "Debug: Creating context..." << std::endl;
+        // 创建新的上下文
+        context_ = sense_voice_init_with_params_no_state(model_path.c_str(), params);
         if (!context_) {
-            std::cerr << "Failed to initialize sense_voice context" << std::endl;
+            std::cerr << "Failed to create sense_voice_context" << std::endl;
             return false;
         }
+        std::cout << "Debug: Context created successfully" << std::endl;
 
-        // 验证上下文状态
+        std::cout << "Debug: Checking context members..." << std::endl;
         if (!context_->model.ctx) {
-            std::cerr << "Model context is null" << std::endl;
+            std::cerr << "Error: Model context is null" << std::endl;
             return false;
         }
+        std::cout << "Debug: Model context OK" << std::endl;
 
-        // 验证模型是否正确加载
         if (!context_->model.buffer) {
-            std::cerr << "Model buffer is null" << std::endl;
+            std::cerr << "Error: Model buffer is null" << std::endl;
             return false;
         }
+        std::cout << "Debug: Model buffer OK" << std::endl;
 
+        std::cout << "Debug: Checking model type..." << std::endl;
+        if (context_->model.model_type.empty()) {
+            std::cerr << "Warning: Model type is empty" << std::endl;
+        } else {
+            std::cout << "Debug: Model type is " << context_->model.model_type << std::endl;
+        }
+
+        std::cout << "Debug: Checking vocabulary..." << std::endl;
+        if (context_->vocab.n_vocab == 0) {
+            std::cerr << "Warning: Vocabulary size is 0" << std::endl;
+        } else {
+            std::cout << "Debug: Vocabulary size is " << context_->vocab.n_vocab << std::endl;
+        }
+
+        std::cout << "Debug: Checking VAD model..." << std::endl;
+        if (!context_->vad_model.model) {
+            std::cerr << "Warning: VAD model is null" << std::endl;
+        } else {
+            std::cout << "Debug: VAD model OK" << std::endl;
+        }
+
+        std::cout << "Debug: Checking encoder..." << std::endl;
+        if (!context_->model.model || !context_->model.model->encoder) {
+            std::cerr << "Warning: Encoder is null" << std::endl;
+        } else {
+            std::cout << "Debug: Encoder OK" << std::endl;
+            std::cout << "Debug: Number of encoder layers: " << context_->model.hparams.n_encoder_layers << std::endl;
+        }
+
+        std::cout << "Debug: Creating state..." << std::endl;
         // 初始化状态
         context_->state = new sense_voice_state();
         if (!context_->state) {
             std::cerr << "Failed to allocate state" << std::endl;
             return false;
         }
+        std::cout << "Debug: State created successfully" << std::endl;
 
+        std::cout << "Debug: Initializing state members..." << std::endl;
         // 初始化状态成员
         context_->state->result_all.clear();
+        std::cout << "Debug: State members initialized" << std::endl;
 
-        std::cout << "Speech recognizer initialized successfully" << std::endl;
+        std::cout << "Model loaded successfully" << std::endl;
         initialized_ = true;
-        state_ = RecognitionState::IDLE;
         return true;
     } catch (const std::exception& e) {
-        std::cerr << "Error initializing recognizer: " << e.what() << std::endl;
-        state_ = RecognitionState::ERROR;
+        std::cerr << "Exception in initialize: " << e.what() << std::endl;
+        return false;
+    } catch (...) {
+        std::cerr << "Unknown exception in initialize" << std::endl;
         return false;
     }
 }
@@ -91,56 +124,50 @@ RecognitionResult SpeechRecognizer::process_recognition(
         throw std::runtime_error("Recognizer not initialized");
     }
 
-    if (!context_->state) {
-        throw std::runtime_error("Recognizer state not initialized");
-    }
-
     try {
         // 设置识别参数
         sense_voice_full_params params = sense_voice_full_default_params(SENSE_VOICE_SAMPLING_GREEDY);
         params.language = config.language_code.c_str();
+        params.n_threads = 4;  // 使用4个线程
         
-        // 将 float 转换为 double
+        // 转换音频数据为double类型
         std::vector<double> samples;
         samples.reserve(audio_data.size());
         for (float sample : audio_data) {
             samples.push_back(static_cast<double>(sample));
         }
-
-        // 清除之前的结果
-        if (context_->state) {
-            context_->state->result_all.clear();
-        }
-
-        // 执行语音识别
+        
+        // 执行识别
         int result = sense_voice_full_parallel(
             context_,
             params,
             samples,
             samples.size(),
-            1  // num_threads
+            4  // n_processors
         );
 
         if (result != 0) {
-            throw std::runtime_error("Failed to perform speech recognition");
+            throw std::runtime_error("Recognition failed");
         }
 
-        // 获取识别结果
+        // 获取结果
         RecognitionResult recognition_result;
         if (context_->state && !context_->state->result_all.empty()) {
             const auto& segment = context_->state->result_all[0];
             recognition_result.transcript = segment.text;
-            recognition_result.confidence = 1.0;
+            recognition_result.confidence = 1.0;  // sense-voice 目前不提供置信度
             recognition_result.is_final = true;
-            recognition_result.start_time = segment.t0;
-            recognition_result.end_time = segment.t1;
-            // TODO: 实现分词功能
-        } else {
-            recognition_result.transcript = "";
-            recognition_result.confidence = 0.0;
-            recognition_result.is_final = true;
-            recognition_result.start_time = 0.0;
-            recognition_result.end_time = 0.0;
+
+            // 如果需要词时间戳
+            if (config.enable_word_time_offsets && !segment.tokens.empty()) {
+                for (const auto& token : segment.tokens) {
+                    Word word;
+                    word.word = context_->vocab.id_to_token[token.id];
+                    word.start_time = token.t0;
+                    word.end_time = token.t1;
+                    recognition_result.words.push_back(word);
+                }
+            }
         }
 
         return recognition_result;
@@ -158,11 +185,25 @@ RecognitionResult SpeechRecognizer::recognize_sync(
         throw std::runtime_error("Recognizer not initialized");
     }
 
-    state_ = RecognitionState::RECOGNIZING;
-    auto audio_data = preprocess_audio(audio_path);
-    auto result = process_recognition(audio_data, config);
-    state_ = RecognitionState::FINISHED;
-    return result;
+    try {
+        std::cout << "Starting recognition for file: " << audio_path << std::endl;
+        
+        // 检查音频文件是否存在
+        std::ifstream audio_file(audio_path, std::ios::binary);
+        if (!audio_file.good()) {
+            std::cerr << "Audio file not found: " << audio_path << std::endl;
+            throw std::runtime_error("Audio file not found");
+        }
+
+        // 读取音频数据
+        auto audio_data = preprocess_audio(audio_path);
+        
+        // 执行识别
+        return process_recognition(audio_data, config);
+    } catch (const std::exception& e) {
+        std::cerr << "Exception in recognize_sync: " << e.what() << std::endl;
+        throw;
+    }
 }
 
 RecognitionResult SpeechRecognizer::recognize_sync(

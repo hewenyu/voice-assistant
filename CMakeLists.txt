@@ -44,7 +44,7 @@ FetchContent_MakeAvailable(httplib)
 # 包含目录
 include_directories(
     ${PROJECT_SOURCE_DIR}/include
-    ${PROJECT_SOURCE_DIR}/dep/SenseVoice.cpp/sense-voice/csrc
+    ${PROJECT_SOURCE_DIR}/dep/SenseVoice.cpp/sense-voice
     ${PROJECT_SOURCE_DIR}/dep/SenseVoice.cpp/sense-voice/csrc/third-party/ggml/include
     ${PROJECT_SOURCE_DIR}/dep/SenseVoice.cpp/sense-voice/csrc/third-party/ggml/src
     ${httplib_SOURCE_DIR}
