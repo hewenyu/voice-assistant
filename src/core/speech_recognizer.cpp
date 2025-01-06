@@ -61,6 +61,16 @@ bool SpeechRecognizer::initialize(const std::string& model_path) {
             return false;
         }
 
+        // 初始化状态
+        context_->state = new sense_voice_state();
+        if (!context_->state) {
+            std::cerr << "Failed to allocate state" << std::endl;
+            return false;
+        }
+
+        // 初始化状态成员
+        context_->state->result_all.clear();
+
         std::cout << "Speech recognizer initialized successfully" << std::endl;
         initialized_ = true;
         state_ = RecognitionState::IDLE;

@@ -11,14 +11,14 @@ void print_usage(const char* program_name) {
               << "Options:\n"
               << "  -m, --model FNAME    Model path (default: models/sense-voice-small-fp16.gguf)\n"
               << "  -h, --help           Show this help message\n"
-              << "  -p, --port PORT      Server port (default: 8080)\n";
+              << "  -p, --port PORT      Server port (default: 8090)\n";
 }
 
 int main(int argc, char* argv[]) {
     try {
         // 默认配置
         std::string host = "0.0.0.0";
-        int port = 8080;
+        int port = 8090;
         
         // 获取当前工作目录
         fs::path current_path = fs::current_path();
@@ -53,7 +53,7 @@ int main(int argc, char* argv[]) {
         
         // 从环境变量读取配置（环境变量优先级低于命令行参数）
         if (const char* env_port = std::getenv("SERVICE_PORT")) {
-            if (port == 8080) { // 只有在命令行没有指定时才使用环境变量
+            if (port == 8090) { // 只有在命令行没有指定时才使用环境变量
                 port = std::stoi(env_port);
             }
         }
