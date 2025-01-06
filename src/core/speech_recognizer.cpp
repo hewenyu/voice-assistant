@@ -122,6 +122,10 @@ RecognitionResult SpeechRecognizer::process_recognition(
         sense_voice_full_params params = sense_voice_full_default_params(SENSE_VOICE_SAMPLING_GREEDY);
         params.language = config.language_code.c_str();
         params.n_threads = 1;  // 使用单线程模式
+        params.offset_ms = 0;  // 从头开始处理
+        params.print_progress = false;  // 不打印进度
+        params.progress_callback = nullptr;  // 不使用回调
+        params.debug_mode = false;  // 不使用调试模式
         
         // 转换音频数据为double类型
         std::vector<double> samples;
@@ -145,41 +149,63 @@ RecognitionResult SpeechRecognizer::process_recognition(
         
         // 清空之前的结果
         context_->state->result_all.clear();
+
+        // 分批处理音频数据
+        const size_t batch_size = 16000;  // 每批处理1秒的数据
+        std::vector<double> batch;
+        RecognitionResult final_result;
         
-        // 执行识别 (使用并行模式，但只用一个处理器)
-        int result = sense_voice_full_parallel(
-            context_,
-            params,
-            samples,
-            samples.size(),
-            1  // 只使用一个处理器
-        );
+        for (size_t i = 0; i < samples.size(); i += batch_size) {
+            // 准备这一批的数据
+            size_t current_batch_size = std::min(batch_size, samples.size() - i);
+            batch.clear();
+            batch.insert(batch.end(), samples.begin() + i, samples.begin() + i + current_batch_size);
+            
+            std::cout << "Debug: Processing batch " << (i / batch_size + 1) 
+                      << " of " << ((samples.size() + batch_size - 1) / batch_size)
+                      << " (size: " << current_batch_size << " samples)" << std::endl;
+            
+            // 执行识别
+            int result = sense_voice_full_parallel(
+                context_,
+                params,
+                batch,
+                batch.size(),
+                1  // 单线程处理
+            );
 
-        if (result != 0) {
-            throw std::runtime_error("Recognition failed with error code: " + std::to_string(result));
-        }
+            if (result != 0) {
+                throw std::runtime_error("Recognition failed with error code: " + std::to_string(result));
+            }
 
-        // 获取结果
-        RecognitionResult recognition_result;
-        if (context_->state && !context_->state->result_all.empty()) {
-            const auto& segment = context_->state->result_all[0];
-            recognition_result.transcript = segment.text;
-            recognition_result.confidence = 1.0;  // sense-voice 目前不提供置信度
-            recognition_result.is_final = true;
+            // 合并结果
+            if (context_->state && !context_->state->result_all.empty()) {
+                for (const auto& segment : context_->state->result_all) {
+                    if (!final_result.transcript.empty()) {
+                        final_result.transcript += " ";
+                    }
+                    final_result.transcript += segment.text;
 
-            // 如果需要词时间戳
-            if (config.enable_word_time_offsets && !segment.tokens.empty()) {
-                for (const auto& token : segment.tokens) {
-                    Word word;
-                    word.word = context_->vocab.id_to_token[token.id];
-                    word.start_time = token.t0;
-                    word.end_time = token.t1;
-                    recognition_result.words.push_back(word);
+                    // 如果需要词时间戳
+                    if (config.enable_word_time_offsets) {
+                        for (const auto& token : segment.tokens) {
+                            Word word;
+                            word.word = context_->vocab.id_to_token[token.id];
+                            word.start_time = token.t0 + (i * 1000.0 / 16000.0);  // 调整时间戳
+                            word.end_time = token.t1 + (i * 1000.0 / 16000.0);    // 调整时间戳
+                            final_result.words.push_back(word);
+                        }
+                    }
                 }
             }
+            
+            // 清空这一批的结果，准备处理下一批
+            context_->state->result_all.clear();
         }
 
-        return recognition_result;
+        final_result.confidence = 1.0;  // sense-voice 目前不提供置信度
+        final_result.is_final = true;
+        return final_result;
     } catch (const std::exception& e) {
         throw std::runtime_error(std::string("Speech recognition failed: ") + e.what());
     }
