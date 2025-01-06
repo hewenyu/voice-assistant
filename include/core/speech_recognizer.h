@@ -3,11 +3,17 @@
 #include <string>
 #include <memory>
 #include <vector>
-#include "sense-voice.h"
 
 // 避免宏冲突
+#ifdef MIN
 #undef MIN
+#endif
+
+#ifdef MAX
 #undef MAX
+#endif
+
+#include "sense-voice.h"
 
 namespace voice_assistant {
 

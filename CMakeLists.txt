@@ -12,9 +12,14 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 # 添加SenseVoice.cpp
 set(BUILD_SHARED_LIBS ON)
-set(SENSEVOICE_BUILD_TESTS OFF)
-set(SENSEVOICE_BUILD_EXAMPLES OFF)
-add_subdirectory(dep/SenseVoice.cpp)
+set(SENSE_VOICE_BUILD_TESTS OFF)
+set(SENSE_VOICE_BUILD_EXAMPLES OFF)
+
+# 添加GGML
+add_subdirectory(dep/SenseVoice.cpp/sense-voice/csrc/third-party/ggml EXCLUDE_FROM_ALL)
+
+# 添加SenseVoice
+add_subdirectory(dep/SenseVoice.cpp/sense-voice)
 
 # 查找必要的包
 find_package(Threads REQUIRED)
@@ -52,7 +57,8 @@ target_link_libraries(voice_assistant
     PRIVATE
     Threads::Threads
     OpenMP::OpenMP_CXX
-    sense-voice-cpp
+    sense-voice-core
+    ggml
     httplib
     sndfile
 ) 
