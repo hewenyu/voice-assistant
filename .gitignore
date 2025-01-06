@@ -11,7 +11,6 @@ cmake_install.cmake
 compile_commands.json
 Makefile
 
-.npm_proxy
 # IDE specific files
 .vscode/
 .idea/
@@ -62,4 +61,8 @@ Thumbs.db
 *.flac
 *.ogg
 temp/
-logs/ 
+logs/
+.npm_proxy 
+
+
+**/models/

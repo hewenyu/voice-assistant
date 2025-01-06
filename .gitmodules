@@ -1,6 +1,3 @@
-[submodule "deps/sherpa-onnx"]
-	path = deps/sherpa-onnx
-	url = https://github.com/k2-fsa/sherpa-onnx.git
 [submodule "dep/SenseVoice.cpp"]
 	path = dep/SenseVoice.cpp
 	url = https://github.com/lovemefan/SenseVoice.cpp.git
