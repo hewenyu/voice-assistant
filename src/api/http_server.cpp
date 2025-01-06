@@ -6,6 +6,7 @@
 #include <chrono>
 #include <random>
 #include <iomanip>
+#include <regex>
 
 using json = nlohmann::json;
 
@@ -131,7 +132,85 @@ void HttpServer::setup_routes() {
     std::cout << "Routes setup completed" << std::endl;
 }
 
+bool HttpServer::verify_auth(const httplib::Request& req, httplib::Response& res) {
+    // 检查是否需要认证
+    if (api_key_.empty()) {
+        return true;  // 如果未设置API密钥，则不需要认证
+    }
+
+    // 检查Authorization头
+    auto auth_header = req.get_header_value("Authorization");
+    if (auth_header.empty()) {
+        json error = {
+            {"error", {
+                {"code", 401},
+                {"message", "Missing Authorization header"},
+                {"status", "UNAUTHENTICATED"}
+            }}
+        };
+        res.status = 401;
+        res.set_content(error.dump(), "application/json");
+        return false;
+    }
+
+    // 验证API密钥
+    if (!verify_api_key(auth_header)) {
+        json error = {
+            {"error", {
+                {"code", 401},
+                {"message", "Invalid API key"},
+                {"status", "UNAUTHENTICATED"}
+            }}
+        };
+        res.status = 401;
+        res.set_content(error.dump(), "application/json");
+        return false;
+    }
+
+    return true;
+}
+
+bool HttpServer::verify_api_key(const std::string& auth_header) {
+    // 检查Bearer token格式
+    std::regex bearer_regex("Bearer\\s+(.+)");
+    std::smatch matches;
+    if (!std::regex_match(auth_header, matches, bearer_regex)) {
+        return false;
+    }
+
+    // 提取并验证token
+    std::string token = matches[1].str();
+    return token == api_key_;
+}
+
+bool HttpServer::verify_request_size(const httplib::Request& req, httplib::Response& res) {
+    size_t content_length = 0;
+    if (auto content_length_str = req.get_header_value("Content-Length"); !content_length_str.empty()) {
+        content_length = std::stoull(content_length_str);
+    }
+
+    if (content_length > max_request_size_) {
+        json error = {
+            {"error", {
+                {"code", 413},
+                {"message", "Request entity too large"},
+                {"status", "FAILED_PRECONDITION"}
+            }}
+        };
+        res.status = 413;
+        res.set_content(error.dump(), "application/json");
+        return false;
+    }
+
+    return true;
+}
+
 void HttpServer::handle_health_check(const httplib::Request& req, httplib::Response& res) {
+    // 验证认证
+    if (!verify_auth(req, res)) {
+        return;
+    }
+
     json response = {
         {"status", "OK"},
         {"message", "Service is healthy"}
@@ -141,6 +220,16 @@ void HttpServer::handle_health_check(const httplib::Request& req, httplib::Respo
 
 void HttpServer::handle_recognize(const httplib::Request& req, httplib::Response& res) {
     try {
+        // 验证认证
+        if (!verify_auth(req, res)) {
+            return;
+        }
+
+        // 验证请求大小
+        if (!verify_request_size(req, res)) {
+            return;
+        }
+
         // 检查 Content-Type
         if (!req.has_header("Content-Type")) {
             throw std::runtime_error("Missing Content-Type header");
@@ -275,21 +364,44 @@ void HttpServer::handle_recognize(const httplib::Request& req, httplib::Response
 }
 
 void HttpServer::handle_long_running_recognize(const httplib::Request& req, httplib::Response& res) {
-    // 生成操作ID
-    std::string operation_id = generate_operation_id();
-    
-    json response = {
-        {"name", "operations/" + operation_id},
-        {"metadata", {
-            {"@type", "type.googleapis.com/google.cloud.speech.v1.LongRunningRecognizeMetadata"},
-            {"progressPercent", 0},
-            {"startTime", current_timestamp()},
-            {"lastUpdateTime", current_timestamp()}
-        }},
-        {"done", false}
-    };
-    
-    res.set_content(response.dump(), "application/json");
+    try {
+        // 验证认证
+        if (!verify_auth(req, res)) {
+            return;
+        }
+
+        // 验证请求大小
+        if (!verify_request_size(req, res)) {
+            return;
+        }
+
+        // 生成操作ID
+        std::string operation_id = generate_operation_id();
+        
+        json response = {
+            {"name", "operations/" + operation_id},
+            {"metadata", {
+                {"@type", "type.googleapis.com/google.cloud.speech.v1.LongRunningRecognizeMetadata"},
+                {"progressPercent", 0},
+                {"startTime", current_timestamp()},
+                {"lastUpdateTime", current_timestamp()}
+            }},
+            {"done", false}
+        };
+        
+        res.set_content(response.dump(), "application/json");
+    } catch (const std::exception& e) {
+        std::cerr << "Exception in long running recognize handler: " << e.what() << std::endl;
+        json error = {
+            {"error", {
+                {"code", 500},
+                {"message", std::string("Internal server error: ") + e.what()},
+                {"status", "INTERNAL"}
+            }}
+        };
+        res.status = 500;
+        res.set_content(error.dump(), "application/json");
+    }
 }
 
 bool HttpServer::parse_multipart_form_data(

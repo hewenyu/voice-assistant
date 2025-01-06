@@ -19,6 +19,10 @@ int main(int argc, char* argv[]) {
         // 默认配置
         std::string host = "0.0.0.0";
         int port = 8090;
+        // api_key
+        std::string api_key = "test_key";
+        // max_request_size
+        size_t max_request_size = 1024 * 1024 * 10; // 10 MB
         
         // 获取当前工作目录
         fs::path current_path = fs::current_path();
@@ -63,6 +67,14 @@ int main(int argc, char* argv[]) {
             }
         }
 
+        // 从环境变量读取API密钥和请求大小限制
+        if (const char* env_api_key = std::getenv("API_KEY")) {
+            api_key = env_api_key;
+        }
+        if (const char* env_max_request_size = std::getenv("MAX_REQUEST_SIZE")) {
+            max_request_size = std::stoull(env_max_request_size);
+        }
+
         // 检查模型文件是否存在
         if (!fs::exists(model_path)) {
             std::cerr << "Error: Model file not found: " << model_path << std::endl;
@@ -71,13 +83,23 @@ int main(int argc, char* argv[]) {
 
         std::cout << "Using model: " << model_path << std::endl;
 
-        // 创建并初始化服务器
+        // 创建服务器实例
         voice_assistant::HttpServer server(host, port);
         
+        // 设置API密钥
+        if (!api_key.empty()) {
+            server.set_api_key(api_key);
+        }
+        
+        // 设置最大请求大小
+        server.set_max_request_size(max_request_size);
+
+        // 初始化服务器
         if (!server.initialize(model_path.string())) {
             std::cerr << "Failed to initialize server" << std::endl;
             return 1;
         }
+
         // 运行服务器
         server.run();
 
