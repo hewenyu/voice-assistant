@@ -29,26 +29,44 @@ enum class RecognitionState {
 
 // 识别配置
 struct RecognitionConfig {
-    std::string encoding = "LINEAR16";
-    int sample_rate_hertz = 16000;
-    std::string language_code = "zh-CN";
-    bool enable_automatic_punctuation = true;
-    std::string model = "default";
+    std::string encoding = "LINEAR16";              // 音频编码格式
+    int sample_rate_hertz = 16000;                  // 采样率
+    std::string language_code = "zh-CN";            // 语言代码
+    bool enable_automatic_punctuation = true;        // 启用自动标点
+    int max_alternatives = 1;                        // 最大备选数量
+    bool profanity_filter = false;                  // 脏话过滤
+    bool enable_word_time_offsets = false;          // 启用词时间戳
     
-    // 流式识别配置
-    bool interim_results = false;     // 是否返回中间结果
-    int chunk_duration_ms = 100;      // 每个音频块的持续时间(毫秒)
-    bool single_utterance = false;    // 是否在检测到第一段语音结束时停止
+    // 语音上下文
+    struct SpeechContext {
+        std::vector<std::string> phrases;           // 提示词列表
+        float boost = 1.0f;                         // 权重值
+    };
+    std::vector<SpeechContext> speech_contexts;     // 语音上下文列表
+    
+    // 音频源
+    struct AudioSource {
+        std::string content;                        // 音频内容（base64编码）
+        std::string uri;                            // 音频URI
+    };
+    AudioSource audio;                              // 音频源
+};
+
+// 词时间戳
+struct WordTimeOffset {
+    std::string word;                               // 识别出的词
+    double start_time;                              // 开始时间
+    double end_time;                                // 结束时间
 };
 
 // 识别结果
 struct RecognitionResult {
-    std::string transcript;           // 识别文本
-    float confidence;                 // 置信度
-    bool is_final;                    // 是否为最终结果
-    double start_time;                // 开始时间
-    double end_time;                  // 结束时间
-    std::vector<std::string> words;   // 分词结果
+    std::string transcript;                         // 识别文本
+    float confidence;                               // 置信度
+    bool is_final;                                  // 是否为最终结果
+    double start_time;                              // 开始时间
+    double end_time;                                // 结束时间
+    std::vector<WordTimeOffset> words;              // 词时间戳列表
 };
 
 // 流式识别的回调函数类型
