@@ -78,9 +78,6 @@ int main(int argc, char* argv[]) {
             std::cerr << "Failed to initialize server" << std::endl;
             return 1;
         }
-
-        std::cout << "Server starting on " << host << ":" << port << std::endl;
-
         // 运行服务器
         server.run();
 

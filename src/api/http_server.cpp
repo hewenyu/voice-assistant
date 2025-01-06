@@ -41,39 +41,94 @@ std::string HttpServer::base64_decode(const std::string& encoded) {
 }
 
 HttpServer::HttpServer(const std::string& host, int port) 
-    : server_(std::make_unique<httplib::Server>()),
-      recognizer_(std::make_unique<SpeechRecognizer>()),
+    : server_(new httplib::Server()),
+      recognizer_(new SpeechRecognizer()),
       host_(host),
       port_(port) {
+    
+    std::cout << "Server initializing on " << host_ << ":" << port_ << std::endl;
     setup_routes();
 }
 
 HttpServer::~HttpServer() = default;
 
 bool HttpServer::initialize(const std::string& model_path) {
-    return recognizer_->initialize(model_path);
+    try {
+        if (!recognizer_->initialize(model_path)) {
+            std::cerr << "Failed to initialize speech recognizer" << std::endl;
+            return false;
+        }
+        return true;
+    } catch (const std::exception& e) {
+        std::cerr << "Exception during initialization: " << e.what() << std::endl;
+        return false;
+    }
 }
 
 void HttpServer::run() {
+    std::cout << "Server starting on " << host_ << ":" << port_ << std::endl;
+    
+    // 设置服务器选项
+    server_->set_keep_alive_max_count(1);
+    server_->set_read_timeout(5);
+    server_->set_write_timeout(5);
+    server_->set_idle_interval(0, 100000);
+    
     if (!server_->listen(host_.c_str(), port_)) {
         std::cerr << "Failed to start server on " << host_ << ":" << port_ << std::endl;
         return;
     }
-    std::cout << "Server started on " << host_ << ":" << port_ << std::endl;
+    
+    std::cout << "Server started successfully" << std::endl;
 }
 
 void HttpServer::setup_routes() {
+    if (!server_) {
+        std::cerr << "Server instance is null" << std::endl;
+        return;
+    }
+
+    std::cout << "Setting up routes..." << std::endl;
+    
     server_->Get("/health", [this](const httplib::Request& req, httplib::Response& res) {
         handle_health_check(req, res);
     });
     
     server_->Post("/recognize", [this](const httplib::Request& req, httplib::Response& res) {
-        handle_recognize(req, res);
+        try {
+            handle_recognize(req, res);
+        } catch (const std::exception& e) {
+            std::cerr << "Exception in recognize handler: " << e.what() << std::endl;
+            json error = {
+                {"error", {
+                    {"code", 500},
+                    {"message", std::string("Internal server error: ") + e.what()},
+                    {"status", "INTERNAL"}
+                }}
+            };
+            res.status = 500;
+            res.set_content(error.dump(), "application/json");
+        }
     });
     
     server_->Post("/longrunningrecognize", [this](const httplib::Request& req, httplib::Response& res) {
-        handle_long_running_recognize(req, res);
+        try {
+            handle_long_running_recognize(req, res);
+        } catch (const std::exception& e) {
+            std::cerr << "Exception in long running recognize handler: " << e.what() << std::endl;
+            json error = {
+                {"error", {
+                    {"code", 500},
+                    {"message", std::string("Internal server error: ") + e.what()},
+                    {"status", "INTERNAL"}
+                }}
+            };
+            res.status = 500;
+            res.set_content(error.dump(), "application/json");
+        }
     });
+
+    std::cout << "Routes setup completed" << std::endl;
 }
 
 void HttpServer::handle_health_check(const httplib::Request& req, httplib::Response& res) {
