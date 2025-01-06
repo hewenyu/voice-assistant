@@ -66,3 +66,6 @@ logs/
 
 
 **/models/
+
+build.sh
+run.sh
