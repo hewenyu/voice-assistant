@@ -33,6 +33,9 @@ private:
     bool parse_multipart_form_data(const httplib::Request& req, 
                                  std::string& audio_data,
                                  RecognitionConfig& config);
+    
+    // Base64解码
+    std::string base64_decode(const std::string& encoded);
 };
 
 } // namespace voice_assistant 

@@ -69,3 +69,10 @@ target_link_libraries(voice_assistant
     httplib
     sndfile
 ) 
+
+# 确保sense-voice-core的符号可见性
+set_target_properties(sense-voice-core PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    C_VISIBILITY_PRESET default
+    CXX_VISIBILITY_PRESET default
+) 
