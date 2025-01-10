@@ -13,6 +13,45 @@
 - 基于 gRPC 的服务器-客户端架构
 - 使用 sherpa-onnx 作为语音识别引擎
 - 支持同步和异步识别模式
+- 灵活的命令行配置支持
+
+## 模型下载与准备
+
+### 下载预训练模型
+
+```bash
+# 创建模型目录
+mkdir -p models
+
+# 下载模型文件（以下二选一）
+# 1. 标准模型（更准确，文件更大）
+wget https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.onnx -O models/model.onnx
+
+# 2. 量化模型（速度更快，文件更小）
+wget https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.int8.onnx -O models/model.int8.onnx
+
+# 下载词表文件
+wget https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt -O models/tokens.txt
+```
+
+### 模型说明
+
+1. 模型类型：
+   - `model.onnx`：标准浮点模型，准确度更高
+   - `model.int8.onnx`：8位量化模型，速度更快，占用空间更小
+
+2. 支持语言：
+   - 中文 (zh)
+   - 英语 (en)
+   - 日语 (ja)
+   - 韩语 (ko)
+   - 粤语 (yue)
+
+3. 模型特点：
+   - 自动语言检测
+   - 多语言混合识别
+   - 标点符号自动添加
+   - 数字智能转换
 
 ## 开发进度
 
@@ -37,6 +76,10 @@
   - [x] GTest 集成
   - [x] 多语言测试用例
   - [x] 自动化测试
+- [x] 配置系统
+  - [x] 命令行参数支持
+  - [x] 模型参数配置
+  - [x] 服务器参数配置
 
 ### 进行中功能
 
@@ -54,7 +97,7 @@
 
 ### 计划功能
 
-- [ ] 配置系统
+- [ ] 配置系统扩展
   - [ ] 配置文件支持
   - [ ] 动态配置更新
   - [ ] 多模型配置
@@ -100,8 +143,26 @@ make
 ## 运行
 
 1. 启动服务器：
+
+基本用法：
 ```bash
-./build/src/voice_server
+# 使用标准模型
+./build/src/voice_server -m models/model.onnx -t models/tokens.txt
+
+# 使用量化模型（速度更快）
+./build/src/voice_server -m models/model.int8.onnx -t models/tokens.txt
+```
+
+完整参数：
+```bash
+./build/src/voice_server \
+  -m models/model.onnx \          # 或 --model-path：模型文件路径（必需）
+  -t models/tokens.txt \          # 或 --tokens-path：词表文件路径（必需）
+  -l auto \                       # 或 --language：语言代码（默认：auto，支持：zh/en/ja/ko/yue）
+  -n 4 \                         # 或 --num-threads：线程数（默认：4）
+  -p cpu \                       # 或 --provider：计算设备（默认：cpu）
+  -d \                          # 或 --debug：启用调试模式
+  -P 50051                      # 或 --port：服务端口（默认：50051）
 ```
 
 2. 运行客户端测试：
