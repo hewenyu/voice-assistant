@@ -70,6 +70,7 @@ target_link_libraries(voice_service_core
 target_include_directories(voice_service_core
     PUBLIC
     ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/include
     ${SHERPA_ONNX_INCLUDE_DIR}
 )
 
@@ -82,6 +83,11 @@ target_link_libraries(voice_server
     PRIVATE
     voice_service_core
     gRPC::grpc++_reflection
+)
+
+target_include_directories(voice_server
+    PUBLIC
+    ${CMAKE_SOURCE_DIR}/include
 )
 
 # Add client executable

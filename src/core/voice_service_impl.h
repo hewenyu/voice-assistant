@@ -3,13 +3,14 @@
 #include <grpcpp/grpcpp.h>
 #include "voice_service.grpc.pb.h"
 #include "sherpa-onnx/c-api/c-api.h"
+#include "core/model_config.h"
 #include <vector>
 #include <mutex>
 #include <memory>
 
 class VoiceServiceImpl final : public VoiceService::Service {
 public:
-    VoiceServiceImpl();
+    explicit VoiceServiceImpl(const ModelConfig& config = ModelConfig());
     ~VoiceServiceImpl();
 
     grpc::Status SyncRecognize(grpc::ServerContext* context,
@@ -61,5 +62,6 @@ private:
 
     const SherpaOnnxOfflineRecognizer* recognizer_;
     SherpaOnnxOfflineRecognizerConfig config_;
+    ModelConfig model_config_;  // Store the model configuration
     std::mutex mutex_;  // 用于保护共享资源
 }; 

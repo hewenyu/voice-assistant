@@ -4,7 +4,9 @@
 #include <vector>
 #include <mutex>
 
-VoiceServiceImpl::VoiceServiceImpl() : recognizer_(nullptr) {
+VoiceServiceImpl::VoiceServiceImpl(const ModelConfig& config) 
+    : recognizer_(nullptr)
+    , model_config_(config) {
     InitializeRecognizer();
 }
 
@@ -21,21 +23,21 @@ bool VoiceServiceImpl::InitializeRecognizer() {
     // Set model paths
     SherpaOnnxOfflineSenseVoiceModelConfig sense_voice_config;
     memset(&sense_voice_config, 0, sizeof(sense_voice_config));
-    sense_voice_config.model = "/home/yueban/code/github/voice-assistant/models/model.int8.onnx";
-    sense_voice_config.language = "auto";
-    sense_voice_config.use_itn = 1;
+    sense_voice_config.model = model_config_.model_path.c_str();
+    sense_voice_config.language = model_config_.language.c_str();
+    sense_voice_config.use_itn = model_config_.use_itn ? 1 : 0;
 
     // Offline model config
     SherpaOnnxOfflineModelConfig model_config;
     memset(&model_config, 0, sizeof(model_config));
-    model_config.debug = 1;
-    model_config.num_threads = 4;
-    model_config.provider = "cpu";
-    model_config.tokens = "/home/yueban/code/github/voice-assistant/models/tokens.txt";
+    model_config.debug = model_config_.debug ? 1 : 0;
+    model_config.num_threads = model_config_.num_threads;
+    model_config.provider = model_config_.provider.c_str();
+    model_config.tokens = model_config_.tokens_path.c_str();
     model_config.sense_voice = sense_voice_config;
 
     config_.model_config = model_config;
-    config_.decoding_method = "greedy_search";
+    config_.decoding_method = model_config_.decoding_method.c_str();
 
     // Create recognizer
     recognizer_ = SherpaOnnxCreateOfflineRecognizer(&config_);
