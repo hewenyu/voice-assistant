@@ -1,0 +1,66 @@
+name: Linux Build
+
+on:
+  push:
+    branches: [ sherpa-onnx ]
+  pull_request:
+    branches: [ sherpa-onnx ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake ninja-build
+        sudo apt-get install -y libgrpc++-dev libgrpc-dev protobuf-compiler-grpc libprotobuf-dev
+        if [ "${{ matrix.compiler }}" = "clang" ]; then
+          sudo apt-get install -y clang
+        fi
+
+    - name: Build sherpa-onnx
+      run: |
+        cd dep/sherpa-onnx
+        mkdir -p build && cd build
+        if [ "${{ matrix.compiler }}" = "clang" ]; then
+          export CC=clang
+          export CXX=clang++
+        fi
+        cmake -DCMAKE_INSTALL_PREFIX=./install ..
+        make -j$(nproc)
+        make install
+        cd ../../..
+
+    - name: Configure
+      run: |
+        if [ "${{ matrix.compiler }}" = "clang" ]; then
+          export CC=clang
+          export CXX=clang++
+        fi
+        mkdir build && cd build
+        cmake -G Ninja ..
+
+    - name: Build
+      run: cd build && ninja
+
+    # - name: Package
+    #   if: matrix.compiler == 'gcc' && startsWith(github.ref, 'refs/tags/')
+    #   run: |
+    #     cd build
+    #     cpack -G TGZ
+    #     mv voice-assistant-*.tar.gz voice-assistant-linux.tar.gz
+
+    # - name: Upload artifact
+    #   if: matrix.compiler == 'gcc' && startsWith(github.ref, 'refs/tags/')
+    #   uses: actions/upload-artifact@v3
+    #   with:
+    #     name: voice-assistant-linux
+    #     path: build/voice-assistant-linux.tar.gz 
