@@ -20,6 +20,9 @@ jobs:
         vcpkg install gtest:x64-windows
         vcpkg install onnxruntime-gpu:x64-windows
         vcpkg integrate install
+        # Explicitly copy grpc plugins to a known location
+        copy C:\vcpkg\installed\x64-windows\tools\protobuf\protoc.exe C:\Windows\System32\
+        copy C:\vcpkg\installed\x64-windows\tools\grpc\grpc_cpp_plugin.exe C:\Windows\System32\
 
     - name: Build sherpa-onnx
       shell: cmd
