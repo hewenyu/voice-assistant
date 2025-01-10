@@ -3,12 +3,13 @@ name: Linux Build
 on:
   push:
     branches: [ sherpa-onnx ]
+    tags: [ v* ]
   pull_request:
     branches: [ sherpa-onnx ]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: debian:12
     steps:
