@@ -56,7 +56,16 @@ add_executable(voice_server
     ${GRPC_HDRS}
 )
 
-# Link libraries
+# Add client executable
+add_executable(test_client
+    src/client/test_client.cpp
+    ${hw_proto_srcs}
+    ${hw_proto_hdrs}
+    ${GRPC_SRCS}
+    ${GRPC_HDRS}
+)
+
+# Link libraries for server
 target_link_libraries(voice_server
     sherpa-onnx-c-api
     sherpa-onnx-cxx-api
@@ -65,7 +74,13 @@ target_link_libraries(voice_server
     gRPC::grpc++_reflection
 )
 
-# Set rpath
+# Link libraries for client
+target_link_libraries(test_client
+    protobuf::libprotobuf
+    gRPC::grpc++
+)
+
+# Set rpath for server
 set_target_properties(voice_server PROPERTIES
     BUILD_WITH_INSTALL_RPATH TRUE
     INSTALL_RPATH "${SHERPA_ONNX_LIB_DIR}"
