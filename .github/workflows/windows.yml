@@ -1,0 +1,63 @@
+name: Windows Build
+
+on:
+  push:
+    branches: [ sherpa-onnx ]
+  pull_request:
+    branches: [ sherpa-onnx ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        vcpkg install grpc:x64-windows
+        vcpkg install protobuf:x64-windows
+        vcpkg install gtest:x64-windows
+        vcpkg install onnxruntime-gpu:x64-windows
+        vcpkg integrate install
+
+    - name: Build sherpa-onnx
+      run: |
+        cd dep/sherpa-onnx
+        mkdir build
+        cd build
+        cmake -G "Visual Studio 17 2022" -A x64 ^
+              -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake ^
+              -DCMAKE_INSTALL_PREFIX=./install ^
+              -DCMAKE_BUILD_TYPE=Release ^
+              -DBUILD_SHARED_LIBS=ON ^
+              -DSHERPA_ONNX_ENABLE_C_API=ON ^
+              -DSHERPA_ONNX_ENABLE_CXX_API=ON ^
+              -DSHERPA_ONNX_ENABLE_PYTHON=OFF ^
+              -DSHERPA_ONNX_ENABLE_TESTS=OFF ^
+              -DSHERPA_ONNX_ENABLE_CHECK=OFF ^
+              -DSHERPA_ONNX_ENABLE_PORTAUDIO=OFF ^
+              -DSHERPA_ONNX_ENABLE_WEBSOCKET=OFF ^
+              -DSHERPA_ONNX_ENABLE_JNI=OFF ^
+              -DSHERPA_ONNX_ENABLE_BINARY=OFF ^
+              -DSHERPA_ONNX_USE_PRE_INSTALLED_ONNXRUNTIME_IF_AVAILABLE=ON ^
+              ..
+        cmake --build . --config Release
+        cmake --install . --config Release
+        cd ../../..
+
+    - name: Configure
+      run: |
+        mkdir build
+        cd build
+        cmake -G "Visual Studio 17 2022" -A x64 ^
+              -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake ^
+              -DCMAKE_BUILD_TYPE=Release ^
+              -DCMAKE_PREFIX_PATH="C:/vcpkg/installed/x64-windows;${{github.workspace}}/dep/sherpa-onnx/build/install" ^
+              ..
+
+    - name: Build
+      run: |
+        cd build
+        cmake --build . --config Release 
