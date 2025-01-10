@@ -62,7 +62,7 @@ jobs:
         mkdir build && cd build
         cmake -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_PREFIX_PATH="/usr/lib/x86_64-linux-gnu/cmake;/__w/voice-assistant/voice-assistant/dep/sherpa-onnx/build/install" \
+          -DCMAKE_PREFIX_PATH="/usr/lib/x86_64-linux-gnu/cmake;${{github.workspace}}/dep/sherpa-onnx/build/install" \
           ..
 
     - name: Build
