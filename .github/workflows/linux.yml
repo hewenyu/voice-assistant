@@ -20,7 +20,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake ninja-build
+        sudo apt-get install -y build-essential cmake ninja-build pkg-config
         sudo apt-get install -y libgrpc++-dev libgrpc-dev protobuf-compiler-grpc libprotobuf-dev
         if [ "${{ matrix.compiler }}" = "clang" ]; then
           sudo apt-get install -y clang
@@ -46,7 +46,9 @@ jobs:
           export CXX=clang++
         fi
         mkdir build && cd build
-        cmake -G Ninja ..
+        cmake -G Ninja \
+          -DCMAKE_PREFIX_PATH="/usr/lib/x86_64-linux-gnu/cmake/grpc;/usr/lib/x86_64-linux-gnu/cmake/protobuf" \
+          ..
 
     - name: Build
       run: cd build && ninja
