@@ -49,7 +49,8 @@ public:
         });
 
         // 模拟实时发送音频数据
-        const size_t chunk_size = 3200;  // 每次发送100ms的音频 (16kHz * 2bytes * 0.1s)
+        // 每次发送1s的音频 (16kHz * 2bytes * 1s)
+        const size_t chunk_size = 32000; 
         for (size_t i = 0; i < audio_data.size(); i += chunk_size) {
             StreamingRecognizeRequest request;
             size_t current_chunk_size = std::min(chunk_size, audio_data.size() - i);
@@ -59,8 +60,8 @@ public:
                 break;
             }
 
-            // 模拟实时性，每100ms发送一次数据
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            // 模拟实时性，每1s发送一次数据
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         }
 
         stream->WritesDone();

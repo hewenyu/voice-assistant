@@ -1,16 +1,18 @@
 #pragma once
 
+#include <string>
+#include <cstring>
+#include "sherpa-onnx/c-api/c-api.h"
 #include <grpcpp/grpcpp.h>
 #include "voice_service.grpc.pb.h"
-#include "sherpa-onnx/c-api/c-api.h"
-#include "core/model_config.h"
 #include <vector>
 #include <mutex>
 #include <memory>
+#include "core/model_config.h"
 
 class VoiceServiceImpl final : public VoiceService::Service {
 public:
-    explicit VoiceServiceImpl(const ModelConfig& config = ModelConfig());
+    explicit VoiceServiceImpl(const ModelConfig& config);
     ~VoiceServiceImpl();
 
     grpc::Status SyncRecognize(grpc::ServerContext* context,
@@ -31,6 +33,7 @@ public:
 
 private:
     bool InitializeRecognizer();
+    bool InitializeVAD();
     std::string ProcessAudio(const std::string& audio_data);
 
     // 流式处理相关的结构
@@ -38,9 +41,15 @@ private:
         std::vector<float> audio_buffer;              // 音频数据缓冲区
         const SherpaOnnxOfflineStream* stream;        // sherpa-onnx 流
         std::string current_text;                     // 当前识别的文本
+        std::string last_sent_text;                   // 最后一次发送的文本
         bool has_final_result;                        // 是否有最终结果
+        bool has_speech;                              // 是否检测到语音
 
-        StreamContext() : stream(nullptr), has_final_result(false) {}
+        StreamContext() 
+            : stream(nullptr)
+            , has_final_result(false)
+            , has_speech(false) {}
+
         ~StreamContext() {
             if (stream) {
                 SherpaOnnxDestroyOfflineStream(stream);
@@ -64,4 +73,8 @@ private:
     SherpaOnnxOfflineRecognizerConfig config_;
     ModelConfig model_config_;  // Store the model configuration
     std::mutex mutex_;  // 用于保护共享资源
+
+    // VAD related members
+    SherpaOnnxVoiceActivityDetector* vad_;
+    SherpaOnnxVadModelConfig vad_config_;
 }; 
