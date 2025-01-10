@@ -20,8 +20,12 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake ninja-build pkg-config
-        sudo apt-get install -y libgrpc++-dev libgrpc-dev protobuf-compiler-grpc libprotobuf-dev
+        sudo apt install -y cmake build-essential pkg-config
+        sudo apt install -y autoconf libtool libgflags-dev libgtest-dev
+        sudo apt install -y clang libc++-dev
+        sudo apt install -y libc-ares-dev
+        sudo apt install -y protobuf-compiler libprotobuf-dev
+        sudo apt install -y libgrpc++-dev libgrpc-dev protobuf-compiler-grpc
         if [ "${{ matrix.compiler }}" = "clang" ]; then
           sudo apt-get install -y clang
         fi
