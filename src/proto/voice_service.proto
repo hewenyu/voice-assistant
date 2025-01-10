@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+service VoiceService {
+    // Performs synchronous speech recognition on an audio file
+    rpc SyncRecognize(SyncRecognizeRequest) returns (SyncRecognizeResponse) {}
+
+    // Performs asynchronous speech recognition on an audio file
+    rpc AsyncRecognize(AsyncRecognizeRequest) returns (AsyncRecognizeResponse) {}
+
+    // Gets the status of an asynchronous recognition operation
+    rpc GetAsyncRecognizeStatus(GetAsyncRecognizeStatusRequest) returns (GetAsyncRecognizeStatusResponse) {}
+
+    // Performs bidirectional streaming speech recognition
+    rpc StreamingRecognize(stream StreamingRecognizeRequest) returns (stream StreamingRecognizeResponse) {}
+}
+
+// Request for synchronous recognition
+message SyncRecognizeRequest {
+    bytes audio_data = 1;  // Raw audio data
+}
+
+// Response for synchronous recognition
+message SyncRecognizeResponse {
+    string text = 1;  // Recognized text
+}
+
+// Request for asynchronous recognition
+message AsyncRecognizeRequest {
+    bytes audio_data = 1;  // Raw audio data
+    string request_id = 2;  // Client-provided request ID
+}
+
+// Response for asynchronous recognition
+message AsyncRecognizeResponse {
+    string request_id = 1;  // Client-provided request ID
+    string operation_id = 2;  // Server-generated operation ID
+}
+
+// Request to get the status of an asynchronous operation
+message GetAsyncRecognizeStatusRequest {
+    string operation_id = 1;  // Operation ID from AsyncRecognizeResponse
+}
+
+// Response containing the status of an asynchronous operation
+message GetAsyncRecognizeStatusResponse {
+    enum Status {
+        UNKNOWN = 0;
+        RUNNING = 1;
+        SUCCEEDED = 2;
+        FAILED = 3;
+    }
+    Status status = 1;
+    string text = 2;  // Recognized text (if status is SUCCEEDED)
+    string error = 3;  // Error message (if status is FAILED)
+}
+
+// Request message for streaming recognition
+message StreamingRecognizeRequest {
+    oneof streaming_request {
+        bytes audio_data = 1;  // Raw audio data
+    }
+}
+
+// Response message for streaming recognition
+message StreamingRecognizeResponse {
+    bool is_final = 1;  // Whether this is the final result
+    string text = 2;  // Recognized text
+} 

@@ -69,9 +69,4 @@ logs/
 build.sh
 run.sh
 
-
-# python 测试文件
-test/
-*.pyc
-*.pyo
-*.pyd
+**/output.wav
