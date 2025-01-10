@@ -81,25 +81,6 @@ cd voice-assistant
 git submodule sync && git submodule update --init --recursive
 ```
 
-2. 安装依赖：
-```bash
-# Ubuntu/Debian
-sudo apt-get install build-essential cmake libsndfile1-dev protobuf-compiler libprotobuf-dev
-# 安装 gRPC
-sudo apt-get install libgrpc++-dev libgrpc-dev
-# 安装 ONNX Runtime
-wget https://github.com/microsoft/onnxruntime/releases/download/v1.16.3/onnxruntime-linux-x64-1.16.3.tgz
-tar xf onnxruntime-linux-x64-1.16.3.tgz
-sudo cp -r onnxruntime-linux-x64-1.16.3/include/* /usr/local/include/
-sudo cp -r onnxruntime-linux-x64-1.16.3/lib/* /usr/local/lib/
-```
-
-3. 构建项目：
-```bash
-mkdir build && cd build
-cmake ..
-make
-```
 
 ## 使用说明
 

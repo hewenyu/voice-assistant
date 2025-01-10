@@ -1,101 +1,68 @@
 syntax = "proto3";
 
-package voice;
-
-// 语音识别请求配置
-message RecognitionConfig {
-  // 音频编码格式
-  enum AudioEncoding {
-    ENCODING_UNSPECIFIED = 0;
-    LINEAR16 = 1;           // PCM 16-bit linear
-    FLAC = 2;               // FLAC (Free Lossless Audio Codec)
-    WAV = 3;                // WAV format
-  }
-
-  AudioEncoding encoding = 1;        // 音频编码
-  int32 sample_rate = 2;            // 采样率 Hz
-  string language_code = 3;         // 语言代码 (e.g., "zh-CN", "en-US")
-  bool enable_word_timestamps = 4;  // 是否启用词级别时间戳
-}
-
-// 同步识别请求
-message SyncRecognizeRequest {
-  RecognitionConfig config = 1;     // 识别配置
-  bytes audio_content = 2;          // 音频内容
-}
-
-// 识别结果中的单个词
-message WordInfo {
-  string word = 1;           // 词
-  float start_time = 2;      // 开始时间（秒）
-  float end_time = 3;        // 结束时间（秒）
-  float confidence = 4;      // 置信度
-}
-
-// 识别结果
-message RecognitionResult {
-  string transcript = 1;           // 完整的识别文本
-  float confidence = 2;           // 整体置信度
-  repeated WordInfo words = 3;    // 词级别信息（如果启用）
-}
-
-// 同步识别响应
-message SyncRecognizeResponse {
-  repeated RecognitionResult results = 1;
-}
-
-// 异步识别请求
-message AsyncRecognizeRequest {
-  RecognitionConfig config = 1;     // 识别配置
-  bytes audio_content = 2;          // 音频内容
-}
-
-// 异步操作元数据
-message AsyncRecognizeMetadata {
-  int32 progress_percent = 1;       // 进度百分比
-  string start_time = 2;            // 开始时间
-  string last_update_time = 3;      // 最后更新时间
-}
-
-// 异步识别响应
-message AsyncRecognizeResponse {
-  string name = 1;                           // 操作名称
-  bool done = 2;                            // 是否完成
-  AsyncRecognizeMetadata metadata = 3;      // 元数据
-  repeated RecognitionResult results = 4;    // 识别结果（仅当完成时）
-}
-
-// 获取异步任务状态请求
-message GetAsyncRecognizeStatusRequest {
-  string name = 1;    // 操作名称
-}
-
-// 流式识别请求
-message StreamingRecognizeRequest {
-  // 第一条消息必须包含配置，后续消息包含音频数据
-  oneof streaming_request {
-    RecognitionConfig config = 1;     // 识别配置
-    bytes audio_content = 2;          // 音频内容
-  }
-}
-
-// 流式识别响应
-message StreamingRecognizeResponse {
-  repeated RecognitionResult results = 1;    // 识别结果
-  bool is_final = 2;                        // 是否为最终结果
-}
-
-// 语音服务
 service VoiceService {
-  // 同步识别 - 适用于短音频（<1分钟）
-  rpc SyncRecognize(SyncRecognizeRequest) returns (SyncRecognizeResponse) {}
-  
-  // 异步识别 - 适用于长音频（<480分钟）
-  rpc AsyncRecognize(AsyncRecognizeRequest) returns (AsyncRecognizeResponse) {}
-  
-  // 获取异步识别任务状态
-  rpc GetAsyncRecognizeStatus(GetAsyncRecognizeStatusRequest) returns (AsyncRecognizeResponse) {}
-  
-  // 流式识别 - 适用于实时音频流
-  rpc StreamingRecognize(stream StreamingRecognizeRequest) returns (stream StreamingRecognizeResponse) {}
+    // Performs synchronous speech recognition on an audio file
+    rpc SyncRecognize(SyncRecognizeRequest) returns (SyncRecognizeResponse) {}
+
+    // Performs asynchronous speech recognition on an audio file
+    rpc AsyncRecognize(AsyncRecognizeRequest) returns (AsyncRecognizeResponse) {}
+
+    // Gets the status of an asynchronous recognition operation
+    rpc GetAsyncRecognizeStatus(GetAsyncRecognizeStatusRequest) returns (GetAsyncRecognizeStatusResponse) {}
+
+    // Performs bidirectional streaming speech recognition
+    rpc StreamingRecognize(stream StreamingRecognizeRequest) returns (stream StreamingRecognizeResponse) {}
+}
+
+// Request for synchronous recognition
+message SyncRecognizeRequest {
+    bytes audio_data = 1;  // Raw audio data
+}
+
+// Response for synchronous recognition
+message SyncRecognizeResponse {
+    string text = 1;  // Recognized text
+}
+
+// Request for asynchronous recognition
+message AsyncRecognizeRequest {
+    bytes audio_data = 1;  // Raw audio data
+    string request_id = 2;  // Client-provided request ID
+}
+
+// Response for asynchronous recognition
+message AsyncRecognizeResponse {
+    string request_id = 1;  // Client-provided request ID
+    string operation_id = 2;  // Server-generated operation ID
+}
+
+// Request to get the status of an asynchronous operation
+message GetAsyncRecognizeStatusRequest {
+    string operation_id = 1;  // Operation ID from AsyncRecognizeResponse
+}
+
+// Response containing the status of an asynchronous operation
+message GetAsyncRecognizeStatusResponse {
+    enum Status {
+        UNKNOWN = 0;
+        RUNNING = 1;
+        SUCCEEDED = 2;
+        FAILED = 3;
+    }
+    Status status = 1;
+    string text = 2;  // Recognized text (if status is SUCCEEDED)
+    string error = 3;  // Error message (if status is FAILED)
+}
+
+// Request message for streaming recognition
+message StreamingRecognizeRequest {
+    oneof streaming_request {
+        bytes audio_data = 1;  // Raw audio data
+    }
+}
+
+// Response message for streaming recognition
+message StreamingRecognizeResponse {
+    bool is_final = 1;  // Whether this is the final result
+    string text = 2;  // Recognized text
 } 
