@@ -1,78 +1,72 @@
 cmake_minimum_required(VERSION 3.10)
-project(voice_assistant VERSION 1.0)
+project(voice_assistant)
 
-# Set policy to allow linking to targets in subdirectories
-cmake_policy(SET CMP0079 NEW)
-
+# 设置 C++ 标准
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# 设置输出目录
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+# 查找依赖包
+find_package(Protobuf REQUIRED)
+find_package(gRPC CONFIG REQUIRED)
 
-# 添加SenseVoice.cpp
-set(BUILD_SHARED_LIBS ON)
-set(SENSE_VOICE_BUILD_TESTS OFF)
-set(SENSE_VOICE_BUILD_EXAMPLES OFF)
+# 设置 ONNX Runtime 路径
+set(ONNXRUNTIME_ROOT_DIR "/usr/local" CACHE PATH "ONNX Runtime root directory")
+set(ONNXRUNTIME_INCLUDE_DIRS "${ONNXRUNTIME_ROOT_DIR}/include")
+set(ONNXRUNTIME_LIB_DIRS "${ONNXRUNTIME_ROOT_DIR}/lib")
 
-# 添加GGML
-add_subdirectory(dep/SenseVoice.cpp/sense-voice/csrc/third-party/ggml EXCLUDE_FROM_ALL)
+# 添加 sherpa-onnx 子目录
+add_subdirectory(dep/sherpa-onnx)
 
-# 添加SenseVoice
-add_subdirectory(dep/SenseVoice.cpp/sense-voice)
-
-# Ensure pthread is linked for sense-voice-core and sense-voice-main
-target_link_libraries(sense-voice-core PUBLIC pthread)
-target_link_libraries(sense-voice-main PRIVATE pthread)
-
-# 查找必要的包
-find_package(Threads REQUIRED)
-find_package(OpenMP REQUIRED)
-
-# 添加cpp-httplib
-include(FetchContent)
-FetchContent_Declare(
-    httplib
-    GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
-    GIT_TAG v0.14.1
+# 生成 protobuf 和 gRPC 文件
+get_target_property(grpc_cpp_plugin_location gRPC::grpc_cpp_plugin LOCATION)
+execute_process(
+    COMMAND ${Protobuf_PROTOC_EXECUTABLE}
+        --grpc_out="${CMAKE_CURRENT_BINARY_DIR}"
+        --cpp_out="${CMAKE_CURRENT_BINARY_DIR}"
+        --plugin=protoc-gen-grpc="${grpc_cpp_plugin_location}"
+        -I "${CMAKE_CURRENT_SOURCE_DIR}/src/proto"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/proto/voice_service.proto"
 )
-FetchContent_MakeAvailable(httplib)
+
+# 添加生成的文件
+set(PROTO_SRCS
+    "${CMAKE_CURRENT_BINARY_DIR}/voice_service.pb.cc"
+)
+set(PROTO_HDRS
+    "${CMAKE_CURRENT_BINARY_DIR}/voice_service.pb.h"
+)
+set(GRPC_SRCS
+    "${CMAKE_CURRENT_BINARY_DIR}/voice_service.grpc.pb.cc"
+)
+set(GRPC_HDRS
+    "${CMAKE_CURRENT_BINARY_DIR}/voice_service.grpc.pb.h"
+)
+
+# 添加源文件
+set(SOURCES
+    src/core/voice_service_impl.cpp
+    src/server/main.cpp
+    ${PROTO_SRCS}
+    ${GRPC_SRCS}
+)
+
+# 创建可执行文件
+add_executable(voice_server ${SOURCES})
 
 # 包含目录
-include_directories(
-    ${PROJECT_SOURCE_DIR}/include
-    ${PROJECT_SOURCE_DIR}/dep/SenseVoice.cpp/sense-voice
-    ${PROJECT_SOURCE_DIR}/dep/SenseVoice.cpp/sense-voice/csrc/third-party/ggml/include
-    ${PROJECT_SOURCE_DIR}/dep/SenseVoice.cpp/sense-voice/csrc/third-party/ggml/src
-    ${httplib_SOURCE_DIR}
+target_include_directories(voice_server PRIVATE
+    ${CMAKE_CURRENT_BINARY_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${Protobuf_INCLUDE_DIRS}
+    ${ONNXRUNTIME_INCLUDE_DIRS}
+    ${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx/build/install/include
 )
 
-# 源文件
-file(GLOB_RECURSE SOURCES 
-    "src/*.cpp"
-    "src/*.cc"
-)
-
-# 可执行文件
-add_executable(voice_assistant ${SOURCES})
-
-# 链接依赖库
-target_link_libraries(voice_assistant
-    PRIVATE
-    Threads::Threads
-    OpenMP::OpenMP_CXX
-    sense-voice-core
-    ggml
-    httplib
-    sndfile
-) 
-
-# 确保sense-voice-core的符号可见性
-set_target_properties(sense-voice-core PROPERTIES
-    POSITION_INDEPENDENT_CODE ON
-    C_VISIBILITY_PRESET default
-    CXX_VISIBILITY_PRESET default
+# 链接库
+target_link_libraries(voice_server PRIVATE
+    ${Protobuf_LIBRARIES}
+    gRPC::grpc++
+    gRPC::grpc
+    onnxruntime
+    sherpa-onnx-c-api
 ) 
