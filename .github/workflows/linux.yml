@@ -29,6 +29,7 @@ jobs:
         apt-get install -y libc-ares-dev
         apt-get install -y protobuf-compiler libprotobuf-dev
         apt-get install -y libgrpc++-dev libgrpc-dev protobuf-compiler-grpc
+        apt-get install -y libonnxruntime-dev
 
     - name: Build sherpa-onnx
       run: |
@@ -37,13 +38,16 @@ jobs:
         export CC=gcc
         export CXX=g++
         cmake -DCMAKE_INSTALL_PREFIX=./install \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DBUILD_SHARED_LIBS=OFF \
               -DSHERPA_ONNX_ENABLE_C_API=ON \
               -DSHERPA_ONNX_ENABLE_CXX_API=ON \
               -DSHERPA_ONNX_ENABLE_PYTHON=OFF \
               -DSHERPA_ONNX_ENABLE_TESTS=OFF \
               -DSHERPA_ONNX_ENABLE_CHECK=OFF \
+              -DSHERPA_ONNX_LINK_STATIC_ONNX=ON \
               ..
-        make -j$(nproc)
+        make VERBOSE=1 -j$(nproc)
         make install
         cd ../../..
 
@@ -53,8 +57,9 @@ jobs:
         export CXX=g++
         mkdir build && cd build
         cmake -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_PREFIX_PATH="/usr/lib/x86_64-linux-gnu/cmake;/__w/voice-assistant/voice-assistant/dep/sherpa-onnx/build/install" \
           ..
 
     - name: Build
-      run: cd build && ninja 
+      run: cd build && ninja -v 
