@@ -19,7 +19,7 @@ bool VoiceServiceImpl::InitializeRecognizer() {
     // Set model paths
     SherpaOnnxOfflineSenseVoiceModelConfig sense_voice_config;
     memset(&sense_voice_config, 0, sizeof(sense_voice_config));
-    sense_voice_config.model = "models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/model.int8.onnx";
+    sense_voice_config.model = "/home/yueban/code/github/voice-assistant/models/model.int8.onnx";
     sense_voice_config.language = "auto";
     sense_voice_config.use_itn = 1;
 
@@ -29,7 +29,7 @@ bool VoiceServiceImpl::InitializeRecognizer() {
     model_config.debug = 1;
     model_config.num_threads = 4;
     model_config.provider = "cpu";
-    model_config.tokens = "models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/tokens.txt";
+    model_config.tokens = "/home/yueban/code/github/voice-assistant/models/tokens.txt";
     model_config.sense_voice = sense_voice_config;
 
     config_.model_config = model_config;

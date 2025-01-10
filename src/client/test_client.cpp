@@ -38,10 +38,12 @@ int main(int argc, char* argv[]) {
     if (audio_data.empty()) {
         return 1;
     }
+    std::cout << "Read audio file size: " << audio_data.size() << " bytes" << std::endl;
 
     // Create request
     SyncRecognizeRequest request;
     request.set_audio_data(audio_data);
+    std::cout << "Request audio data size: " << request.audio_data().size() << " bytes" << std::endl;
 
     // Call RPC
     SyncRecognizeResponse response;

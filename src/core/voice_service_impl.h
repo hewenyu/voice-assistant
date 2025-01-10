@@ -1,8 +1,8 @@
 #pragma once
 
 #include <grpcpp/grpcpp.h>
-#include <sherpa-onnx/c-api/c-api.h>
 #include "voice_service.grpc.pb.h"
+#include "sherpa-onnx/c-api/c-api.h"
 
 class VoiceServiceImpl final : public VoiceService::Service {
 public:
