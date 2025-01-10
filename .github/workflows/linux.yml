@@ -20,7 +20,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt install -y cmake build-essential pkg-config
+        sudo apt install -y cmake build-essential pkg-config ninja-build
         sudo apt install -y autoconf libtool libgflags-dev libgtest-dev
         sudo apt install -y clang libc++-dev
         sudo apt install -y libc-ares-dev
@@ -37,6 +37,9 @@ jobs:
         if [ "${{ matrix.compiler }}" = "clang" ]; then
           export CC=clang
           export CXX=clang++
+        else
+          export CC=gcc
+          export CXX=g++
         fi
         cmake -DCMAKE_INSTALL_PREFIX=./install ..
         make -j$(nproc)
@@ -48,6 +51,9 @@ jobs:
         if [ "${{ matrix.compiler }}" = "clang" ]; then
           export CC=clang
           export CXX=clang++
+        else
+          export CC=gcc
+          export CXX=g++
         fi
         mkdir build && cd build
         cmake -G Ninja \
