@@ -1,6 +1,7 @@
 #include "core/voice_service_impl.h"
 #include <iostream>
 #include <cstring>
+#include <vector>
 
 VoiceServiceImpl::VoiceServiceImpl() : recognizer_(nullptr) {
     InitializeRecognizer();
@@ -50,18 +51,30 @@ std::string VoiceServiceImpl::ProcessAudio(const std::string& audio_data) {
         return "Recognizer not initialized";
     }
 
+    std::cout << "Processing audio data size: " << audio_data.size() << " bytes" << std::endl;
+
     // Create stream for this request
     const SherpaOnnxOfflineStream* stream = SherpaOnnxCreateOfflineStream(recognizer_);
     if (!stream) {
         return "Failed to create stream";
     }
 
+    // Convert audio data from int16 to float32
+    std::vector<float> samples;
+    samples.resize(audio_data.size() / 2);  // int16 is 2 bytes
+    const int16_t* int16_data = reinterpret_cast<const int16_t*>(audio_data.data());
+    for (size_t i = 0; i < samples.size(); ++i) {
+        samples[i] = int16_data[i] / 32768.0f;  // Convert to float in range [-1, 1]
+    }
+
+    std::cout << "Converted " << samples.size() << " samples" << std::endl;
+
     // Accept audio data
     SherpaOnnxAcceptWaveformOffline(
         stream,
         16000, // sample rate
-        reinterpret_cast<const float*>(audio_data.data()),
-        audio_data.size() / sizeof(float)
+        samples.data(),
+        samples.size()
     );
 
     // Decode
