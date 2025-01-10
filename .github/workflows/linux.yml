@@ -3,9 +3,7 @@ name: Linux Build
 on:
   push:
     branches: [ sherpa-onnx ]
-    tags: [ v* ]
-  pull_request:
-    branches: [ sherpa-onnx ]
+  workflow_call:
 
 jobs:
   build:
@@ -66,4 +64,20 @@ jobs:
           ..
 
     - name: Build
-      run: cd build && ninja -v 
+      run: cd build && ninja -v
+
+    - name: Package artifacts
+      run: |
+        mkdir -p artifacts
+        cp build/src/voice_server artifacts/
+        cp build/src/test_client artifacts/
+        cp build/src/streaming_client artifacts/
+        cp build/test/voice_recognition_test artifacts/
+        cp -r dep/sherpa-onnx/build/install/lib artifacts/
+        cp -r dep/sherpa-onnx/build/install/include artifacts/
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: linux-artifacts
+        path: artifacts/ 

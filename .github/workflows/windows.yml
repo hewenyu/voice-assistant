@@ -3,8 +3,7 @@ name: Windows Build
 on:
   push:
     branches: [ sherpa-onnx ]
-  pull_request:
-    branches: [ sherpa-onnx ]
+  workflow_call:
 
 jobs:
   build:
@@ -63,4 +62,23 @@ jobs:
       shell: cmd
       run: |
         cd build
-        cmake --build . --config Release 
+        cmake --build . --config Release
+
+    - name: Package artifacts
+      shell: cmd
+      run: |
+        mkdir artifacts
+        copy build\src\Release\voice_server.exe artifacts\
+        copy build\src\Release\test_client.exe artifacts\
+        copy build\src\Release\streaming_client.exe artifacts\
+        copy build\test\Release\voice_recognition_test.exe artifacts\
+        xcopy /E /I dep\sherpa-onnx\build\install\bin artifacts\bin
+        xcopy /E /I dep\sherpa-onnx\build\install\lib artifacts\lib
+        xcopy /E /I dep\sherpa-onnx\build\install\include artifacts\include
+        copy C:\vcpkg\installed\x64-windows\bin\*.dll artifacts\bin\
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: windows-artifacts
+        path: artifacts/ 
