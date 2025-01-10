@@ -61,7 +61,11 @@ jobs:
         # Try to find gRPC config files
         find /usr -name "*grpc*.cmake" 2>/dev/null || true
         mkdir build && cd build
+        export gRPC_DIR=/usr/lib/x86_64-linux-gnu/cmake/grpc
         cmake -G Ninja \
+          -DCMAKE_PREFIX_PATH="/usr/lib/x86_64-linux-gnu/cmake" \
+          -DgRPC_DIR=/usr/lib/x86_64-linux-gnu/cmake/grpc \
+          -DProtobuf_DIR=/usr/lib/x86_64-linux-gnu/cmake/protobuf \
           ..
 
     - name: Build
