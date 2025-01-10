@@ -68,3 +68,5 @@ logs/
 
 build.sh
 run.sh
+
+**/output.wav

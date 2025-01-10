@@ -94,6 +94,16 @@ target_link_libraries(test_client
     voice_service_proto
 )
 
+# Add streaming client executable
+add_executable(streaming_client
+    client/streaming_client.cpp
+)
+
+target_link_libraries(streaming_client
+    PRIVATE
+    voice_service_proto
+)
+
 # Set rpath for server
 set_target_properties(voice_server PROPERTIES
     BUILD_WITH_INSTALL_RPATH TRUE

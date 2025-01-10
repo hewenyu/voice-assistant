@@ -2,6 +2,7 @@
 #include <iostream>
 #include <cstring>
 #include <vector>
+#include <mutex>
 
 VoiceServiceImpl::VoiceServiceImpl() : recognizer_(nullptr) {
     InitializeRecognizer();
@@ -113,9 +114,101 @@ grpc::Status VoiceServiceImpl::GetAsyncRecognizeStatus(grpc::ServerContext* cont
     return grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "Method not implemented");
 }
 
-grpc::Status VoiceServiceImpl::StreamingRecognize(grpc::ServerContext* context,
-                                                 grpc::ServerReaderWriter<StreamingRecognizeResponse,
-                                                 StreamingRecognizeRequest>* stream) {
-    // Not implemented yet
-    return grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "Method not implemented");
+struct StreamContext {
+    const SherpaOnnxOfflineStream* stream = nullptr;
+    std::vector<float> audio_buffer;
+    std::string current_text;
+    bool has_final_result = false;
+};
+
+void VoiceServiceImpl::ProcessStreamingAudio(
+    StreamContext& context,
+    const std::string& audio_data,
+    StreamingRecognizeResponse* response
+) {
+    // 将音频数据转换为float格式
+    const int16_t* int16_data = reinterpret_cast<const int16_t*>(audio_data.data());
+    size_t num_samples = audio_data.size() / 2;  // int16 is 2 bytes
+    
+    // 添加到缓冲区
+    size_t old_size = context.audio_buffer.size();
+    context.audio_buffer.resize(old_size + num_samples);
+    for (size_t i = 0; i < num_samples; ++i) {
+        context.audio_buffer[old_size + i] = int16_data[i] / 32768.0f;
+    }
+
+    // 如果没有创建流，创建一个新的
+    if (!context.stream) {
+        context.stream = SherpaOnnxCreateOfflineStream(recognizer_);
+    }
+
+    // 处理音频数据
+    SherpaOnnxAcceptWaveformOffline(
+        context.stream,
+        16000,  // sample rate
+        context.audio_buffer.data(),
+        context.audio_buffer.size()
+    );
+
+    // 进行识别
+    SherpaOnnxDecodeOfflineStream(recognizer_, context.stream);
+}
+
+bool VoiceServiceImpl::ProcessStreamingResult(
+    StreamContext& context,
+    StreamingRecognizeResponse* response
+) {
+    // 获取识别结果
+    const SherpaOnnxOfflineRecognizerResult* result = 
+        SherpaOnnxGetOfflineStreamResult(context.stream);
+    
+    if (!result) {
+        return false;
+    }
+
+    std::string new_text = result->text;
+    
+    // 如果有新的文本
+    if (new_text != context.current_text) {
+        context.current_text = new_text;
+        response->set_is_final(false);
+        response->set_text(new_text);
+        return true;
+    }
+
+    return false;
+}
+
+grpc::Status VoiceServiceImpl::StreamingRecognize(
+    grpc::ServerContext* context,
+    grpc::ServerReaderWriter<StreamingRecognizeResponse,
+    StreamingRecognizeRequest>* stream
+) {
+    StreamContext stream_context;
+    StreamingRecognizeRequest request;
+    StreamingRecognizeResponse response;
+
+    // 读取客户端的流式请求
+    while (stream->Read(&request)) {
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        // 处理音频数据
+        if (request.has_audio_data()) {
+            ProcessStreamingAudio(stream_context, request.audio_data(), &response);
+            
+            // 检查是否有新的识别结果
+            if (ProcessStreamingResult(stream_context, &response)) {
+                stream->Write(response);
+            }
+        }
+    }
+
+    // 处理最后的结果
+    if (!stream_context.has_final_result) {
+        response.set_is_final(true);
+        response.set_text(stream_context.current_text);
+        stream->Write(response);
+    }
+
+    return grpc::Status::OK;
 } 
