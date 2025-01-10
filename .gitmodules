@@ -1,4 +1,4 @@
-[submodule "dep/SenseVoice.cpp"]
-	path = dep/SenseVoice.cpp
-	url = https://github.com/hewenyu/SenseVoice.cpp.git
-	branch = dep
+[submodule "dep/sherpa-onnx"]
+	path = dep/sherpa-onnx
+	url = https://github.com/hewenyu/sherpa-onnx.git
+	branch = master
