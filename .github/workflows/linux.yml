@@ -36,7 +36,13 @@ jobs:
         mkdir -p build && cd build
         export CC=gcc
         export CXX=g++
-        cmake -DCMAKE_INSTALL_PREFIX=./install ..
+        cmake -DCMAKE_INSTALL_PREFIX=./install \
+              -DSHERPA_ONNX_ENABLE_C_API=ON \
+              -DSHERPA_ONNX_ENABLE_CXX_API=ON \
+              -DSHERPA_ONNX_ENABLE_PYTHON=OFF \
+              -DSHERPA_ONNX_ENABLE_TESTS=OFF \
+              -DSHERPA_ONNX_ENABLE_CHECK=OFF \
+              ..
         make -j$(nproc)
         make install
         cd ../../..
@@ -47,7 +53,7 @@ jobs:
         export CXX=g++
         mkdir build && cd build
         cmake -G Ninja \
-          -DCMAKE_PREFIX_PATH="/usr/lib/x86_64-linux-gnu/cmake" \
+          -DCMAKE_PREFIX_PATH="/usr/lib/x86_64-linux-gnu/cmake;/__w/voice-assistant/voice-assistant/dep/sherpa-onnx/build/install" \
           ..
 
     - name: Build
