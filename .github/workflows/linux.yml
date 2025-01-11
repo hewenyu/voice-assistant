@@ -1,0 +1,97 @@
+name: Linux Build
+
+on:
+  push:
+    branches: [ sherpa-onnx ]
+  workflow_call:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    container:
+      image: debian:12
+    steps:
+    - name: Install git
+      run: |
+        apt-get update
+        apt-get install -y git
+
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    
+    - name: Install dependencies
+      run: |
+        apt-get update
+        apt-get install -y cmake build-essential pkg-config ninja-build
+        apt-get install -y autoconf libtool libgflags-dev libgtest-dev
+        apt-get install -y libc-ares-dev
+        apt-get install -y protobuf-compiler libprotobuf-dev
+        apt-get install -y libgrpc++-dev libgrpc-dev protobuf-compiler-grpc
+
+    - name: Build sherpa-onnx
+      run: |
+        cd dep/sherpa-onnx
+        mkdir -p build && cd build
+        export CC=gcc
+        export CXX=g++
+        cmake -DCMAKE_INSTALL_PREFIX=./install \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DBUILD_SHARED_LIBS=ON \
+              -DSHERPA_ONNX_ENABLE_C_API=ON \
+              -DSHERPA_ONNX_ENABLE_CXX_API=ON \
+              -DSHERPA_ONNX_ENABLE_PYTHON=OFF \
+              -DSHERPA_ONNX_ENABLE_TESTS=OFF \
+              -DSHERPA_ONNX_ENABLE_CHECK=OFF \
+              -DSHERPA_ONNX_ENABLE_PORTAUDIO=OFF \
+              -DSHERPA_ONNX_ENABLE_WEBSOCKET=OFF \
+              -DSHERPA_ONNX_ENABLE_JNI=OFF \
+              -DSHERPA_ONNX_ENABLE_BINARY=OFF \
+              -DSHERPA_ONNX_USE_PRE_INSTALLED_ONNXRUNTIME_IF_AVAILABLE=ON \
+              ..
+        make VERBOSE=1 -j$(nproc)
+        make install
+        cd ../../..
+
+    - name: Configure
+      run: |
+        export CC=gcc
+        export CXX=g++
+        mkdir build && cd build
+        cmake -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_PREFIX_PATH="/usr/lib/x86_64-linux-gnu/cmake;${{github.workspace}}/dep/sherpa-onnx/build/install" \
+          ..
+
+    - name: Build
+      run: cd build && ninja -v
+
+    - name: Package artifacts
+      run: |
+        mkdir -p artifacts/bin artifacts/lib artifacts/include
+        # Copy main executables if they exist
+        for file in voice_server test_client streaming_client; do
+          if [ -f "build/src/$file" ]; then
+            cp "build/src/$file" artifacts/bin/
+          else
+            echo "Warning: $file not found"
+          fi
+        done
+        
+        # Copy test executable if it exists
+        if [ -f "build/test/voice_recognition_test" ]; then
+          cp "build/test/voice_recognition_test" artifacts/bin/
+        fi
+        
+        # Copy sherpa-onnx libraries and headers
+        cp -r dep/sherpa-onnx/build/install/lib/* artifacts/lib/
+        cp -r dep/sherpa-onnx/build/install/include/* artifacts/include/
+        
+        # Copy system dependencies if needed
+        ldd artifacts/bin/* | grep "=> /" | awk '{print $3}' | sort -u | xargs -I '{}' cp -v '{}' artifacts/lib/
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: linux-artifacts
+        path: artifacts/ 

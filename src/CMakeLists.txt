@@ -58,6 +58,15 @@ target_include_directories(voice_service_proto
 # Create a library for the core implementation
 add_library(voice_service_core
     core/voice_service_impl.cpp
+    core/voice_service_impl.h
+    core/model_config.h
+)
+
+target_include_directories(voice_service_core
+    PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR}
+    ${SHERPA_ONNX_INCLUDE_DIR}
 )
 
 target_link_libraries(voice_service_core
@@ -67,47 +76,60 @@ target_link_libraries(voice_service_core
     sherpa-onnx-cxx-api
 )
 
-target_include_directories(voice_service_core
-    PUBLIC
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/include
-    ${SHERPA_ONNX_INCLUDE_DIR}
-)
-
-# Add server executable
+# Server executable
 add_executable(voice_server
     server/main.cpp
+)
+
+target_include_directories(voice_server
+    PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR}
 )
 
 target_link_libraries(voice_server
     PRIVATE
     voice_service_core
-    gRPC::grpc++_reflection
 )
 
-target_include_directories(voice_server
-    PUBLIC
-    ${CMAKE_SOURCE_DIR}/include
-)
-
-# Add client executable
-add_executable(test_client
-    client/test_client.cpp
-)
-
-target_link_libraries(test_client
-    PRIVATE
-    voice_service_proto
-)
-
-# Add streaming client executable
+# Client executable
 add_executable(streaming_client
     client/streaming_client.cpp
+)
+
+target_include_directories(streaming_client
+    PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR}
 )
 
 target_link_libraries(streaming_client
     PRIVATE
     voice_service_proto
+    ${_REFLECTION}
+    ${_GRPC_GRPCPP}
+    ${_PROTOBUF_LIBPROTOBUF}
+)
+
+# VAD client executable
+add_executable(vad_client
+    client/vad_client.cpp
+)
+
+target_include_directories(vad_client
+    PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR}
+    ${SHERPA_ONNX_INCLUDE_DIR}
+)
+
+target_link_libraries(vad_client
+    PRIVATE
+    voice_service_proto
+    sherpa-onnx-c-api
+    ${_REFLECTION}
+    ${_GRPC_GRPCPP}
+    ${_PROTOBUF_LIBPROTOBUF}
 )
 
 # Set rpath for server

@@ -1,35 +1,89 @@
 #include "core/voice_service_impl.h"
+
+// C++ Standard Library
 #include <iostream>
-#include <cstring>
 #include <vector>
 #include <mutex>
+#include <cstdio>
+#include <cstring>
 
 VoiceServiceImpl::VoiceServiceImpl(const ModelConfig& config) 
     : recognizer_(nullptr)
-    , model_config_(config) {
-    InitializeRecognizer();
+    , model_config_(config)
+    , vad_(nullptr) {
+    std::cout << "Initializing VoiceServiceImpl..." << std::endl;
+    
+    if (!InitializeRecognizer()) {
+        throw std::runtime_error("Failed to initialize recognizer");
+    }
+    std::cout << "Recognizer initialized successfully" << std::endl;
+
+    if (!InitializeVAD()) {
+        throw std::runtime_error("Failed to initialize VAD");
+    }
+    std::cout << "VAD initialized successfully" << std::endl;
 }
 
 VoiceServiceImpl::~VoiceServiceImpl() {
+    std::cout << "Destroying VoiceServiceImpl..." << std::endl;
     if (recognizer_) {
         SherpaOnnxDestroyOfflineRecognizer(recognizer_);
+        std::cout << "Recognizer destroyed" << std::endl;
+    }
+    if (vad_) {
+        SherpaOnnxDestroyVoiceActivityDetector(vad_);
+        std::cout << "VAD destroyed" << std::endl;
     }
 }
 
-bool VoiceServiceImpl::InitializeRecognizer() {
-    // Configure sherpa-onnx
-    memset(&config_, 0, sizeof(config_));
+bool VoiceServiceImpl::InitializeVAD() {
+    std::cout << "Initializing VAD with model: " << model_config_.vad_model_path << std::endl;
+    std::cout << "VAD parameters:" << std::endl
+              << "  threshold: " << model_config_.vad_threshold << std::endl
+              << "  min_silence_duration: " << model_config_.vad_min_silence_duration << std::endl
+              << "  min_speech_duration: " << model_config_.vad_min_speech_duration << std::endl
+              << "  window_size: " << model_config_.vad_window_size << std::endl;
 
-    // Set model paths
-    SherpaOnnxOfflineSenseVoiceModelConfig sense_voice_config;
-    memset(&sense_voice_config, 0, sizeof(sense_voice_config));
+    // Zero initialization
+    SherpaOnnxVadModelConfig config = {};
+    vad_config_ = config;
+    
+    // Configure VAD with more sensitive parameters
+    vad_config_.silero_vad.model = model_config_.vad_model_path.c_str();
+    vad_config_.silero_vad.threshold = 0.3;
+    vad_config_.silero_vad.min_silence_duration = 0.25;  // 0.25
+    vad_config_.silero_vad.min_speech_duration = 0.1;  // 增加最小语音持续时间，减少碎片
+    vad_config_.silero_vad.max_speech_duration = 15;  // 减少最大语音持续时间，避免过长
+    vad_config_.silero_vad.window_size = 256;  // 使用较小的窗口大小，提高实时性
+    vad_config_.sample_rate = model_config_.sample_rate;
+    vad_config_.num_threads = model_config_.num_threads;
+    vad_config_.debug = model_config_.debug ? 1 : 0;
+
+
+    // 创建VAD，使用更大的初始缓冲区大小 (2M samples)
+    vad_ = SherpaOnnxCreateVoiceActivityDetector(&vad_config_, 120);  // 增加缓冲区大小
+    if (!vad_) {
+        std::cerr << "Failed to create VAD" << std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool VoiceServiceImpl::InitializeRecognizer() {
+    std::cout << "Initializing recognizer with model: " << model_config_.model_path << std::endl;
+    
+    // Zero initialization
+    SherpaOnnxOfflineRecognizerConfig cfg = {};
+    config_ = cfg;
+
+    // Set model paths with zero initialization
+    SherpaOnnxOfflineSenseVoiceModelConfig sense_voice_config = {};
     sense_voice_config.model = model_config_.model_path.c_str();
     sense_voice_config.language = model_config_.language.c_str();
     sense_voice_config.use_itn = model_config_.use_itn ? 1 : 0;
 
-    // Offline model config
-    SherpaOnnxOfflineModelConfig model_config;
-    memset(&model_config, 0, sizeof(model_config));
+    // Offline model config with zero initialization
+    SherpaOnnxOfflineModelConfig model_config = {};
     model_config.debug = model_config_.debug ? 1 : 0;
     model_config.num_threads = model_config_.num_threads;
     model_config.provider = model_config_.provider.c_str();
@@ -45,7 +99,6 @@ bool VoiceServiceImpl::InitializeRecognizer() {
         std::cerr << "Failed to create recognizer" << std::endl;
         return false;
     }
-
     return true;
 }
 
@@ -75,7 +128,7 @@ std::string VoiceServiceImpl::ProcessAudio(const std::string& audio_data) {
     // Accept audio data
     SherpaOnnxAcceptWaveformOffline(
         stream,
-        16000, // sample rate
+        model_config_.sample_rate,
         samples.data(),
         samples.size()
     );
@@ -105,80 +158,136 @@ grpc::Status VoiceServiceImpl::SyncRecognize(grpc::ServerContext* context,
 grpc::Status VoiceServiceImpl::AsyncRecognize(grpc::ServerContext* context,
                                              const AsyncRecognizeRequest* request,
                                              AsyncRecognizeResponse* response) {
-    // Not implemented yet
     return grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "Method not implemented");
 }
 
 grpc::Status VoiceServiceImpl::GetAsyncRecognizeStatus(grpc::ServerContext* context,
                                                       const GetAsyncRecognizeStatusRequest* request,
                                                       GetAsyncRecognizeStatusResponse* response) {
-    // Not implemented yet
     return grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "Method not implemented");
 }
-
-struct StreamContext {
-    const SherpaOnnxOfflineStream* stream = nullptr;
-    std::vector<float> audio_buffer;
-    std::string current_text;
-    bool has_final_result = false;
-};
 
 void VoiceServiceImpl::ProcessStreamingAudio(
     StreamContext& context,
     const std::string& audio_data,
     StreamingRecognizeResponse* response
 ) {
-    // 将音频数据转换为float格式
+    if (!vad_) {
+        std::cerr << "VAD not initialized!" << std::endl;
+        return;
+    }
+
+    // Convert audio data to int16 format
     const int16_t* int16_data = reinterpret_cast<const int16_t*>(audio_data.data());
     size_t num_samples = audio_data.size() / 2;  // int16 is 2 bytes
-    
-    // 添加到缓冲区
-    size_t old_size = context.audio_buffer.size();
-    context.audio_buffer.resize(old_size + num_samples);
+    if (num_samples == 0) {
+        return;
+    }
+
+    // Convert to float format
+    std::vector<float> samples(num_samples);
     for (size_t i = 0; i < num_samples; ++i) {
-        context.audio_buffer[old_size + i] = int16_data[i] / 32768.0f;
+        samples[i] = int16_data[i] / 32768.0f;
     }
 
-    // 如果没有创建流，创建一个新的
-    if (!context.stream) {
-        context.stream = SherpaOnnxCreateOfflineStream(recognizer_);
+    try {
+        // Feed audio data to VAD
+        SherpaOnnxVoiceActivityDetectorAcceptWaveform(vad_, samples.data(), samples.size());
+
+        // Check current speech state
+        bool is_speech = SherpaOnnxVoiceActivityDetectorDetected(vad_);
+        
+        // State transition from non-speech to speech
+        if (is_speech && !context.was_speech) {
+            std::cout << "Speech started" << std::endl;
+            // Create new stream for new speech segment
+            if (context.stream) {
+                SherpaOnnxDestroyOfflineStream(context.stream);
+            }
+            context.stream = SherpaOnnxCreateOfflineStream(recognizer_);
+            context.current_text.clear();
+            context.has_speech = true;
+        }
+
+        // If in speech state, add current samples and get intermediate results
+        if (is_speech && context.stream) {
+            SherpaOnnxAcceptWaveformOffline(
+                context.stream,
+                model_config_.sample_rate,
+                samples.data(),
+                samples.size()
+            );
+            
+            // Get intermediate results more frequently
+            SherpaOnnxDecodeOfflineStream(recognizer_, context.stream);
+            const SherpaOnnxOfflineRecognizerResult* result = 
+                SherpaOnnxGetOfflineStreamResult(context.stream);
+            
+            if (result && result->text) {
+                std::string new_text = result->text;
+                // Always send intermediate results when text changes
+                if (!new_text.empty()) {
+                    response->set_text(new_text);
+                    response->set_is_final(false);
+                    context.current_text = new_text;
+                }
+                SherpaOnnxDestroyOfflineRecognizerResult(result);
+            }
+        }
+        
+        // State transition from speech to non-speech
+        if (!is_speech && context.was_speech) {
+            std::cout << "Speech ended" << std::endl;
+            
+            // Process any remaining VAD segments
+            while (!SherpaOnnxVoiceActivityDetectorEmpty(vad_)) {
+                const SherpaOnnxSpeechSegment* segment = 
+                    SherpaOnnxVoiceActivityDetectorFront(vad_);
+                
+                if (segment && segment->n > 0) {
+                    // Add segment to recognition stream
+                    SherpaOnnxAcceptWaveformOffline(
+                        context.stream,
+                        model_config_.sample_rate,
+                        segment->samples,
+                        segment->n
+                    );
+                }
+                
+                SherpaOnnxDestroySpeechSegment(segment);
+                SherpaOnnxVoiceActivityDetectorPop(vad_);
+            }
+            
+            // Get final result for this speech segment
+            if (context.stream && context.has_speech) {
+                SherpaOnnxDecodeOfflineStream(recognizer_, context.stream);
+                const SherpaOnnxOfflineRecognizerResult* result = 
+                    SherpaOnnxGetOfflineStreamResult(context.stream);
+                
+                if (result && result->text) {
+                    std::string new_text = result->text;
+                    if (!new_text.empty()) {
+                        response->set_text(new_text);
+                        response->set_is_final(true);
+                        
+                        // Reset stream after getting final result
+                        SherpaOnnxDestroyOfflineStream(context.stream);
+                        context.stream = nullptr;
+                        context.has_speech = false;
+                        context.current_text.clear();
+                    }
+                    SherpaOnnxDestroyOfflineRecognizerResult(result);
+                }
+            }
+        }
+        
+        context.was_speech = is_speech;
+
+    } catch (const std::exception& e) {
+        std::cerr << "Exception in ProcessStreamingAudio: " << e.what() << std::endl;
+    } catch (...) {
+        std::cerr << "Unknown exception in ProcessStreamingAudio" << std::endl;
     }
-
-    // 处理音频数据
-    SherpaOnnxAcceptWaveformOffline(
-        context.stream,
-        16000,  // sample rate
-        context.audio_buffer.data(),
-        context.audio_buffer.size()
-    );
-
-    // 进行识别
-    SherpaOnnxDecodeOfflineStream(recognizer_, context.stream);
-}
-
-bool VoiceServiceImpl::ProcessStreamingResult(
-    StreamContext& context,
-    StreamingRecognizeResponse* response
-) {
-    // 获取识别结果
-    const SherpaOnnxOfflineRecognizerResult* result = 
-        SherpaOnnxGetOfflineStreamResult(context.stream);
-    
-    if (!result) {
-        return false;
-    }
-
-    std::string new_text = result->text;
-    
-    // 如果有新的文本
-    if (new_text != context.current_text) {
-        context.current_text = new_text;
-        response->set_is_final(false);
-        response->set_text(new_text);
-        return true;
-    }
-
-    return false;
 }
 
 grpc::Status VoiceServiceImpl::StreamingRecognize(
@@ -190,26 +299,17 @@ grpc::Status VoiceServiceImpl::StreamingRecognize(
     StreamingRecognizeRequest request;
     StreamingRecognizeResponse response;
 
-    // 读取客户端的流式请求
     while (stream->Read(&request)) {
         std::lock_guard<std::mutex> lock(mutex_);
 
-        // 处理音频数据
         if (request.has_audio_data()) {
             ProcessStreamingAudio(stream_context, request.audio_data(), &response);
             
-            // 检查是否有新的识别结果
-            if (ProcessStreamingResult(stream_context, &response)) {
+            // 只有当有文本时才发送响应
+            if (!response.text().empty()) {
                 stream->Write(response);
             }
         }
-    }
-
-    // 处理最后的结果
-    if (!stream_context.has_final_result) {
-        response.set_is_final(true);
-        response.set_text(stream_context.current_text);
-        stream->Write(response);
     }
 
     return grpc::Status::OK;
