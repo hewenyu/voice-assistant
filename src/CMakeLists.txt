@@ -111,6 +111,27 @@ target_link_libraries(streaming_client
     ${_PROTOBUF_LIBPROTOBUF}
 )
 
+# VAD client executable
+add_executable(vad_client
+    client/vad_client.cpp
+)
+
+target_include_directories(vad_client
+    PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR}
+    ${SHERPA_ONNX_INCLUDE_DIR}
+)
+
+target_link_libraries(vad_client
+    PRIVATE
+    voice_service_proto
+    sherpa-onnx-c-api
+    ${_REFLECTION}
+    ${_GRPC_GRPCPP}
+    ${_PROTOBUF_LIBPROTOBUF}
+)
+
 # Set rpath for server
 set_target_properties(voice_server PROPERTIES
     BUILD_WITH_INSTALL_RPATH TRUE
