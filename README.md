@@ -175,14 +175,25 @@ make
 
 完整参数：
 ```bash
-./build/src/voice_server \
-  -m models/model.onnx \          # 或 --model-path：模型文件路径（必需）
-  -t models/tokens.txt \          # 或 --tokens-path：词表文件路径（必需）
-  -l auto \                       # 或 --language：语言代码（默认：auto，支持：zh/en/ja/ko/yue）
-  -n 4 \                         # 或 --num-threads：线程数（默认：4）
-  -p cpu \                       # 或 --provider：计算设备（默认：cpu）
-  -d \                          # 或 --debug：启用调试模式
-  -P 50051                      # 或 --port：服务端口（默认：50051）
+Usage: ./build/src/voice_server [options]
+Options:
+  -m, --model-path PATH     Path to the model file (required)
+  -t, --tokens-path PATH    Path to the tokens file (required)
+  -l, --language LANG       Language code (default: auto)
+  -n, --num-threads N       Number of threads (default: 4)
+  -p, --provider TYPE       Provider type (default: cpu)
+  -d, --debug               Enable debug mode
+  -P, --port PORT           Server port (default: 50051)
+
+VAD Options:
+  -v, --vad-model PATH      Path to VAD model file (required)
+  --vad-threshold FLOAT     VAD threshold (default: 0.5)
+  --vad-min-silence FLOAT   Min silence duration in seconds (default: 0.5)
+  --vad-min-speech FLOAT    Min speech duration in seconds (default: 0.25)
+  --vad-max-speech FLOAT    Max speech duration in seconds (default: 5.0)
+  --vad-window-size INT     Window size in samples (default: 512)
+  --sample-rate INT         Audio sample rate (default: 16000)
+  -h, --help                Show this help message
 ```
 
 2. 运行客户端：
