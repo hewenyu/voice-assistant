@@ -263,7 +263,7 @@ wget https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2
 wget https://github.com/snakers4/silero-vad/raw/master/src/silero_vad/data/silero_vad.onnx -O models/vad.onnx 
 ```
 # 启动服务器
-./bin/voice_server -m models/model.onnx -t models/tokens.txt --vad-model-path models/vad.onnx 
+./bin/voice_server -m models/model.onnx -t models/tokens.txt -v models/vad.onnx 
 ```
 
 ## 许可证
