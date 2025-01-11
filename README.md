@@ -12,8 +12,24 @@
   - 粤语
 - 基于 gRPC 的服务器-客户端架构
 - 使用 sherpa-onnx 作为语音识别引擎
-- 支持同步和异步识别模式
+- 支持同步和流式识别模式
 - 灵活的命令行配置支持
+
+## 最新改进
+
+### 2024-01-xx
+- 优化了 VAD 参数配置
+  - 降低阈值到 0.3 提高检测灵敏度
+  - 调整最小静音时长为 0.25s
+  - 调整最小语音时长为 0.1s
+  - 设置最大语音时长为 15s
+  - 减小窗口大小到 256 提高实时性
+
+- 改进了流式识别的语音分段
+  - 实现了更精确的语音状态检测
+  - 优化了中间结果的输出频率
+  - 改进了语音段的开始和结束判断
+  - 提供更自然的语音分段效果
 
 ## 模型下载与准备
 
@@ -32,6 +48,9 @@ wget https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2
 
 # 下载词表文件
 wget https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt -O models/tokens.txt
+
+# 下载 VAD 模型
+wget https://github.com/snakers4/silero-vad/raw/master/src/silero_vad/data/silero_vad.onnx -O models/vad.onnx
 ```
 
 ### 模型说明
@@ -39,6 +58,7 @@ wget https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2
 1. 模型类型：
    - `model.onnx`：标准浮点模型，准确度更高
    - `model.int8.onnx`：8位量化模型，速度更快，占用空间更小
+   - `vad.onnx`：语音活动检测模型
 
 2. 支持语言：
    - 中文 (zh)
@@ -52,6 +72,7 @@ wget https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2
    - 多语言混合识别
    - 标点符号自动添加
    - 数字智能转换
+   - 精确的语音活动检测
 
 ## 开发进度
 
@@ -69,13 +90,14 @@ wget https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2
   - [x] 模型加载
   - [x] 语音识别接口
   - [x] 多语言支持
+  - [x] VAD 集成
 - [x] 同步语音识别
   - [x] 音频数据处理
   - [x] 识别结果处理
-- [x] 测试系统
-  - [x] GTest 集成
-  - [x] 多语言测试用例
-  - [x] 自动化测试
+- [x] 流式语音识别
+  - [x] 实时音频处理
+  - [x] 流式结果返回
+  - [x] VAD 语音分段
 - [x] 配置系统
   - [x] 命令行参数支持
   - [x] 模型参数配置
@@ -87,9 +109,6 @@ wget https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2
   - [ ] 任务队列管理
   - [ ] 状态追踪
   - [ ] 结果回调
-- [ ] 流式语音识别
-  - [ ] 实时音频处理
-  - [ ] 流式结果返回
 - [ ] 错误处理优化
   - [ ] 错误码规范
   - [ ] 重试机制
@@ -121,6 +140,7 @@ wget https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2
 - gRPC
 - Protobuf
 - sherpa-onnx
+- sox (用于音频预处理)
 - GTest (用于测试)
 
 ## 构建
@@ -165,8 +185,15 @@ make
   -P 50051                      # 或 --port：服务端口（默认：50051）
 ```
 
-2. 运行客户端测试：
+2. 运行客户端：
 ```bash
+# VAD 测试客户端
+./build/src/vad_client input.wav models/vad.onnx
+
+# 流式识别客户端
+./build/src/streaming_client input.wav
+
+# 同步识别测试
 ./build/src/test_client test/test_data/en.wav  # 英语测试
 ./build/src/test_client test/test_data/zh.wav  # 中文测试
 ./build/src/test_client test/test_data/ja.wav  # 日语测试
@@ -174,45 +201,14 @@ make
 ./build/src/test_client test/test_data/yue.wav # 粤语测试
 ```
 
-## 测试
+## 配置说明
 
-项目包含完整的自动化测试套件：
-
-### 运行测试
-
-```bash
-cd build
-ctest --output-on-failure
-```
-
-### 测试用例
-
-1. 英语识别测试
-   - 测试文件：`test/test_data/en.wav`
-   - 预期结果：包含 "The tribal chieftain called for the boy and presented him with 50 pieces of gold"
-
-2. 中文识别测试
-   - 测试文件：`test/test_data/zh.wav`
-   - 预期结果：包含 "开放时间早上9点至下午5点"
-
-3. 日语识别测试
-   - 测试文件：`test/test_data/ja.wav`
-   - 预期结果：包含 "うちの中学は弁当制で持っていけない場合は50円の学校販売のパンを買う"
-
-4. 韩语识别测试
-   - 测试文件：`test/test_data/ko.wav`
-   - 预期结果：包含 "조 금만 생각 을 하 면서 살 면 훨씬 편할 거야"
-
-5. 粤语识别测试
-   - 测试文件：`test/test_data/yue.wav`
-   - 预期结果：包含 "呢几个字都表达唔到我想讲嘅意思"
-
-### 测试特性
-
-- 自动等待服务器就绪
-- 详细的测试输出信息
-- 准确的结果验证
-- 支持 CI/CD 集成
+### VAD 配置
+- threshold: 语音检测阈值 (0.3)
+- min_silence_duration: 最小静音持续时间 (0.25s)
+- min_speech_duration: 最小语音持续时间 (0.1s)
+- max_speech_duration: 最大语音持续时间 (15s)
+- window_size: 处理窗口大小 (256)
 
 ## 项目结构
 
@@ -222,13 +218,20 @@ ctest --output-on-failure
 ├── dep/                    # 依赖库
 │   └── sherpa-onnx/       # sherpa-onnx语音识别引擎
 ├── doc/                    # 文档
-├── include/               # 头文件
 ├── models/                # 模型文件
 ├── src/                   # 源代码
 │   ├── client/           # 客户端代码
+│   │   ├── streaming_client.cpp  # 流式识别客户端
+│   │   ├── test_client.cpp      # 同步识别测试客户端
+│   │   └── vad_client.cpp       # VAD 测试客户端
 │   ├── core/             # 核心实现
+│   │   ├── model_config.h        # 模型配置定义
+│   │   ├── voice_service_impl.cpp # 服务实现
+│   │   └── voice_service_impl.h   # 服务接口定义
 │   ├── proto/            # Protobuf定义
+│   │   └── voice_service.proto   # 服务接口协议
 │   └── server/           # 服务器代码
+│       └── main.cpp             # 服务器入口
 └── test/                  # 测试代码和数据
     └── test_data/        # 测试音频文件
 ```
