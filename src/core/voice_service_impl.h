@@ -44,11 +44,13 @@ private:
         std::string last_sent_text;                   // 最后一次发送的文本
         bool has_final_result;                        // 是否有最终结果
         bool has_speech;                              // 是否检测到语音
+        size_t continuous_silence_chunks;             // 连续静音块计数
 
         StreamContext() 
             : stream(nullptr)
             , has_final_result(false)
-            , has_speech(false) {}
+            , has_speech(false)
+            , continuous_silence_chunks(0) {}
 
         ~StreamContext() {
             if (stream) {
