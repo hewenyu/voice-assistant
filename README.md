@@ -222,6 +222,50 @@ make
 - max_speech_duration: 最大语音持续时间 (15s)
 - window_size: 处理窗口大小 (256)
 
+
+
+
+## 快速开始
+
+### 下载预编译包
+
+访问 [Releases](https://github.com/hewenyu/voice-assistant/releases) 页面，下载最新的 `voice-assistant-linux.tar.gz` 文件。
+
+```bash
+# 使用 curl 下载最新版本
+curl -L https://github.com/hewenyu/voice-assistant/releases/latest/download/voice-assistant-linux.tar.gz -o voice-assistant-linux.tar.gz
+
+# 解压下载的文件
+tar xzf voice-assistant-linux.tar.gz
+
+# 进入解压后的目录
+cd linux
+
+# 添加可执行权限
+chmod +x ./bin/*
+
+# 设置库文件路径（重要：每次新开终端都需要执行）
+export LD_LIBRARY_PATH=$PWD/lib:$LD_LIBRARY_PATH
+# 创建模型目录
+mkdir -p models
+
+# 下载模型文件（以下二选一）
+# 1. 标准模型（更准确，文件更大）
+wget https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.onnx -O models/model.onnx
+
+# 2. 量化模型（速度更快，文件更小）
+wget https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.int8.onnx -O models/model.int8.onnx
+
+# 下载词表文件
+wget https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt -O models/tokens.txt
+
+# 下载 VAD 模型
+wget https://github.com/snakers4/silero-vad/raw/master/src/silero_vad/data/silero_vad.onnx -O models/vad.onnx 
+```
+# 启动服务器
+./bin/voice_server -m models/model.onnx -t models/tokens.txt --vad-model-path models/vad.onnx 
+```
+
 ## 许可证
 
 [License信息]
