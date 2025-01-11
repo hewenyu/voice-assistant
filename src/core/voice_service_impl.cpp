@@ -3,6 +3,7 @@
 #include <vector>
 #include <mutex>
 #include <cstring>
+#include <cstdio>
 
 VoiceServiceImpl::VoiceServiceImpl(const ModelConfig& config) 
     : recognizer_(nullptr)
@@ -41,7 +42,7 @@ bool VoiceServiceImpl::InitializeVAD() {
               << "  min_speech_duration: " << model_config_.vad_min_speech_duration << std::endl
               << "  window_size: " << model_config_.vad_window_size << std::endl;
 
-    memset(&vad_config_, 0, sizeof(vad_config_));
+    std::memset(&vad_config_, 0, sizeof(vad_config_));
     
     // Configure VAD with more sensitive parameters
     vad_config_.silero_vad.model = model_config_.vad_model_path.c_str();
@@ -54,7 +55,8 @@ bool VoiceServiceImpl::InitializeVAD() {
     vad_config_.num_threads = model_config_.num_threads;
     vad_config_.debug = model_config_.debug ? 1 : 0;
 
-    vad_ = SherpaOnnxCreateVoiceActivityDetector(&vad_config_, 30);
+    // 创建VAD，使用更大的初始缓冲区大小 (2M samples)
+    vad_ = SherpaOnnxCreateVoiceActivityDetector(&vad_config_, 120);  // 增加缓冲区大小
     if (!vad_) {
         std::cerr << "Failed to create VAD" << std::endl;
         return false;
@@ -66,7 +68,7 @@ bool VoiceServiceImpl::InitializeRecognizer() {
     std::cout << "Initializing recognizer with model: " << model_config_.model_path << std::endl;
     
     // Configure sherpa-onnx
-    memset(&config_, 0, sizeof(config_));
+    std::memset(&config_, 0, sizeof(config_));
 
     // Set model paths
     SherpaOnnxOfflineSenseVoiceModelConfig sense_voice_config;
