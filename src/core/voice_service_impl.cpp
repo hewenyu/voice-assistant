@@ -50,14 +50,15 @@ bool VoiceServiceImpl::InitializeVAD() {
     
     // Configure VAD with more sensitive parameters
     vad_config_.silero_vad.model = model_config_.vad_model_path.c_str();
-    vad_config_.silero_vad.threshold = 0.5f;  // 提高阈值，减少误检
-    vad_config_.silero_vad.min_silence_duration = 0.5f;  // 增加静音持续时间，更好地分割句子
-    vad_config_.silero_vad.min_speech_duration = 0.25f;  // 增加最小语音持续时间，减少碎片
-    vad_config_.silero_vad.max_speech_duration = 20.0f;  // 减少最大语音持续时间，避免过长
-    vad_config_.silero_vad.window_size = 512;  // 使用较小的窗口大小，提高实时性
+    vad_config_.silero_vad.threshold = 0.3;
+    vad_config_.silero_vad.min_silence_duration = 0.25;  // 0.25
+    vad_config_.silero_vad.min_speech_duration = 0.1;  // 增加最小语音持续时间，减少碎片
+    vad_config_.silero_vad.max_speech_duration = 15;  // 减少最大语音持续时间，避免过长
+    vad_config_.silero_vad.window_size = 256;  // 使用较小的窗口大小，提高实时性
     vad_config_.sample_rate = model_config_.sample_rate;
     vad_config_.num_threads = model_config_.num_threads;
     vad_config_.debug = model_config_.debug ? 1 : 0;
+
 
     // 创建VAD，使用更大的初始缓冲区大小 (2M samples)
     vad_ = SherpaOnnxCreateVoiceActivityDetector(&vad_config_, 120);  // 增加缓冲区大小
@@ -207,6 +208,32 @@ void VoiceServiceImpl::ProcessStreamingAudio(
             context.current_text.clear();
             context.has_speech = true;
         }
+
+        // If in speech state, add current samples and get intermediate results
+        if (is_speech && context.stream) {
+            SherpaOnnxAcceptWaveformOffline(
+                context.stream,
+                model_config_.sample_rate,
+                samples.data(),
+                samples.size()
+            );
+            
+            // Get intermediate results more frequently
+            SherpaOnnxDecodeOfflineStream(recognizer_, context.stream);
+            const SherpaOnnxOfflineRecognizerResult* result = 
+                SherpaOnnxGetOfflineStreamResult(context.stream);
+            
+            if (result && result->text) {
+                std::string new_text = result->text;
+                // Always send intermediate results when text changes
+                if (!new_text.empty()) {
+                    response->set_text(new_text);
+                    response->set_is_final(false);
+                    context.current_text = new_text;
+                }
+                SherpaOnnxDestroyOfflineRecognizerResult(result);
+            }
+        }
         
         // State transition from speech to non-speech
         if (!is_speech && context.was_speech) {
@@ -231,7 +258,7 @@ void VoiceServiceImpl::ProcessStreamingAudio(
                 SherpaOnnxVoiceActivityDetectorPop(vad_);
             }
             
-            // Decode and get final result for this speech segment
+            // Get final result for this speech segment
             if (context.stream && context.has_speech) {
                 SherpaOnnxDecodeOfflineStream(recognizer_, context.stream);
                 const SherpaOnnxOfflineRecognizerResult* result = 
@@ -239,38 +266,18 @@ void VoiceServiceImpl::ProcessStreamingAudio(
                 
                 if (result && result->text) {
                     std::string new_text = result->text;
-                    if (!new_text.empty() && new_text != context.current_text) {
+                    if (!new_text.empty()) {
                         response->set_text(new_text);
                         response->set_is_final(true);
-                        context.current_text = new_text;
+                        
+                        // Reset stream after getting final result
+                        SherpaOnnxDestroyOfflineStream(context.stream);
+                        context.stream = nullptr;
+                        context.has_speech = false;
+                        context.current_text.clear();
                     }
                     SherpaOnnxDestroyOfflineRecognizerResult(result);
                 }
-            }
-        }
-        
-        // If in speech state, add current samples to recognition stream
-        if (is_speech && context.stream) {
-            SherpaOnnxAcceptWaveformOffline(
-                context.stream,
-                model_config_.sample_rate,
-                samples.data(),
-                samples.size()
-            );
-            
-            // Get intermediate results
-            SherpaOnnxDecodeOfflineStream(recognizer_, context.stream);
-            const SherpaOnnxOfflineRecognizerResult* result = 
-                SherpaOnnxGetOfflineStreamResult(context.stream);
-            
-            if (result && result->text) {
-                std::string new_text = result->text;
-                if (!new_text.empty() && new_text != context.current_text) {
-                    response->set_text(new_text);
-                    response->set_is_final(false);
-                    context.current_text = new_text;
-                }
-                SherpaOnnxDestroyOfflineRecognizerResult(result);
             }
         }
         
