@@ -9,11 +9,8 @@ jobs:
   linux:
     uses: ./.github/workflows/linux.yml
 
-  windows:
-    uses: ./.github/workflows/windows.yml
-
   release:
-    needs: [linux, windows]
+    needs: [linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -24,24 +21,16 @@ jobs:
           name: linux-artifacts
           path: artifacts/linux
 
-      - name: Download Windows artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: windows-artifacts
-          path: artifacts/windows
-
       - name: Create Release Archives
         run: |
           cd artifacts
           tar -czf voice-assistant-linux.tar.gz linux/
-          zip -r voice-assistant-windows.zip windows/
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
             artifacts/voice-assistant-linux.tar.gz
-            artifacts/voice-assistant-windows.zip
           draft: false
           prerelease: false
           generate_release_notes: true 

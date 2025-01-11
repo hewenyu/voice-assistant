@@ -1,8 +1,6 @@
 name: Linux Build
 
 on:
-  push:
-    branches: [ sherpa-onnx ]
   workflow_call:
 
 jobs:
