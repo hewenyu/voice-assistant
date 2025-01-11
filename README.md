@@ -201,6 +201,18 @@ make
 ./build/src/test_client test/test_data/yue.wav # 粤语测试
 ```
 
+### 流式识别示例输出
+
+使用流式识别客户端处理中文音频文件的输出示例：
+
+<!-- 使用doc/asset/stream.png -->
+![stream](doc/asset/stream.png)
+
+这个示例展示了：
+1. 实时的中间识别结果输出
+2. 随着语音输入的增加，识别结果逐步完善
+3. 最终输出完整的识别结果
+
 ## 配置说明
 
 ### VAD 配置
@@ -209,32 +221,6 @@ make
 - min_speech_duration: 最小语音持续时间 (0.1s)
 - max_speech_duration: 最大语音持续时间 (15s)
 - window_size: 处理窗口大小 (256)
-
-## 项目结构
-
-```
-.
-├── CMakeLists.txt          # 主CMake配置文件
-├── dep/                    # 依赖库
-│   └── sherpa-onnx/       # sherpa-onnx语音识别引擎
-├── doc/                    # 文档
-├── models/                # 模型文件
-├── src/                   # 源代码
-│   ├── client/           # 客户端代码
-│   │   ├── streaming_client.cpp  # 流式识别客户端
-│   │   ├── test_client.cpp      # 同步识别测试客户端
-│   │   └── vad_client.cpp       # VAD 测试客户端
-│   ├── core/             # 核心实现
-│   │   ├── model_config.h        # 模型配置定义
-│   │   ├── voice_service_impl.cpp # 服务实现
-│   │   └── voice_service_impl.h   # 服务接口定义
-│   ├── proto/            # Protobuf定义
-│   │   └── voice_service.proto   # 服务接口协议
-│   └── server/           # 服务器代码
-│       └── main.cpp             # 服务器入口
-└── test/                  # 测试代码和数据
-    └── test_data/        # 测试音频文件
-```
 
 ## 许可证
 
