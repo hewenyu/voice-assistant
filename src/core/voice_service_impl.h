@@ -38,25 +38,11 @@ private:
 
     // 流式处理相关的结构
     struct StreamContext {
-        std::vector<float> audio_buffer;              // 音频数据缓冲区
-        const SherpaOnnxOfflineStream* stream;        // sherpa-onnx 流
-        std::string current_text;                     // 当前识别的文本
-        std::string last_sent_text;                   // 最后一次发送的文本
-        bool has_final_result;                        // 是否有最终结果
-        bool has_speech;                              // 是否检测到语音
-        size_t continuous_silence_chunks;             // 连续静音块计数
-
-        StreamContext() 
-            : stream(nullptr)
-            , has_final_result(false)
-            , has_speech(false)
-            , continuous_silence_chunks(0) {}
-
-        ~StreamContext() {
-            if (stream) {
-                SherpaOnnxDestroyOfflineStream(stream);
-            }
-        }
+        const SherpaOnnxOfflineStream* stream = nullptr;
+        std::string current_text;
+        bool has_speech = false;
+        bool was_speech = false;  // Track previous speech state
+        int continuous_silence_chunks = 0;
     };
 
     // 流式处理相关的方法

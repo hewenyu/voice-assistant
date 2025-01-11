@@ -5,11 +5,31 @@
 #include <thread>
 #include <chrono>
 
+// Preprocess audio file using sox
+std::string PreprocessAudio(const std::string& input_file) {
+    std::string output_file = input_file + ".16k.wav";
+    std::string cmd = "sox \"" + input_file + "\" -r 16000 -c 1 -b 16 \"" + output_file + "\"";
+    
+    int ret = std::system(cmd.c_str());
+    if (ret != 0) {
+        std::cerr << "Failed to preprocess audio file" << std::endl;
+        return "";
+    }
+    
+    return output_file;
+}
+
 // 读取音频文件
 std::string ReadFile(const char* filename) {
-    std::ifstream file(filename, std::ios::binary | std::ios::ate);
+    // First preprocess the audio file
+    std::string processed_file = PreprocessAudio(filename);
+    if (processed_file.empty()) {
+        return "";
+    }
+
+    std::ifstream file(processed_file, std::ios::binary | std::ios::ate);
     if (!file.is_open()) {
-        std::cerr << "Failed to open file: " << filename << std::endl;
+        std::cerr << "Failed to open file: " << processed_file << std::endl;
         return "";
     }
 
@@ -19,10 +39,12 @@ std::string ReadFile(const char* filename) {
     std::string buffer;
     buffer.resize(size);
     if (!file.read(const_cast<char*>(buffer.data()), size)) {
-        std::cerr << "Failed to read file: " << filename << std::endl;
+        std::cerr << "Failed to read file: " << processed_file << std::endl;
+        std::remove(processed_file.c_str());  // Clean up temporary file
         return "";
     }
 
+    std::remove(processed_file.c_str());  // Clean up temporary file
     return buffer;
 }
 
