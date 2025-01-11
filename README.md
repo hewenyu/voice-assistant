@@ -222,7 +222,9 @@ make
 - max_speech_duration: 最大语音持续时间 (15s)
 - window_size: 处理窗口大小 (256)
 
+## 许可证
 
+本项目采用 [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0) 开源协议。
 
 
 ## 快速开始
@@ -265,7 +267,3 @@ wget https://github.com/snakers4/silero-vad/raw/master/src/silero_vad/data/siler
 # 启动服务器
 ./bin/voice_server -m models/model.onnx -t models/tokens.txt -v models/vad.onnx 
 ```
-
-## 许可证
-
-[License信息]
