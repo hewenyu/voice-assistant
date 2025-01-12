@@ -7,45 +7,50 @@
 
 namespace voice {
 
+struct WhisperConfig {
+    std::string encoder_path;
+    std::string decoder_path;
+    std::string tokens_path;
+    std::string language = "en";  // "en", "zh", "ja", "ko", etc.
+    std::string task = "transcribe";  // "transcribe" or "translate"
+    int tail_paddings = 0;
+    std::string decoding_method = "greedy_search";
+    
+    // Language detection settings
+    bool enable_language_detection = false;  // Only used when language is "auto"
+    int language_detection_num_threads = 1;
+    std::string language_detection_provider = "cpu";
+    bool language_detection_debug = false;
+};
+
+struct SenseVoiceConfig {
+    std::string model_path;
+    std::string tokens_path;
+    std::string language = "auto";  // "auto", "zh", "en", "ja", "ko", "yue"
+    std::string decoding_method = "greedy_search";
+    bool use_itn = true;
+};
+
+struct VadConfig {
+    std::string model_path;
+    float threshold = 0.3;
+    float min_silence_duration = 0.25;
+    float min_speech_duration = 0.1;
+    float max_speech_duration = 15.0;
+    int window_size = 256;
+    int sample_rate = 16000;
+};
+
 struct ModelConfig {
-    // Basic configuration
+    std::string type;  // "sense_voice" or "whisper"
     std::string provider = "cpu";
     int num_threads = 4;
     bool debug = false;
 
-    // Model type
-    std::string type = "sense_voice";  // "sense_voice" or "whisper"
-
-    // Model configuration
-    struct SenseVoiceConfig {
-        std::string model_path;
-        std::string tokens_path;
-        std::string language = "auto";
-        std::string decoding_method = "greedy_search";
-        bool use_itn = true;
-    } sense_voice;
-
-    // Whisper model configuration
-    struct WhisperConfig {
-        std::string encoder_path;
-        std::string decoder_path;
-        std::string tokens_path;
-        std::string language = "en";
-        std::string task = "transcribe";  // "transcribe" or "translate"
-        int tail_paddings = 0;
-        std::string decoding_method = "greedy_search";
-    } whisper;
-
-    // VAD configuration
-    struct VadConfig {
-        std::string model_path;
-        float threshold = 0.5f;
-        float min_silence_duration = 0.5f;
-        float min_speech_duration = 0.25f;
-        float max_speech_duration = 5.0f;
-        int window_size = 512;
-        int sample_rate = 16000;
-    } vad;
+    // Model specific configurations
+    WhisperConfig whisper;
+    SenseVoiceConfig sense_voice;
+    VadConfig vad;
 
     // Load configuration from YAML file
     static ModelConfig LoadFromFile(const std::string& config_path) {
@@ -81,6 +86,17 @@ struct ModelConfig {
                 model_config.whisper.task = whisper_config["task"].as<std::string>("transcribe");
                 model_config.whisper.tail_paddings = whisper_config["tail_paddings"].as<int>(0);
                 model_config.whisper.decoding_method = whisper_config["decoding_method"].as<std::string>("greedy_search");
+                
+                // Load language detection settings if language is "auto"
+                if (model_config.whisper.language == "auto") {
+                    model_config.whisper.enable_language_detection = true;
+                    model_config.whisper.language_detection_num_threads = 
+                        whisper_config["language_detection_num_threads"].as<int>(1);
+                    model_config.whisper.language_detection_provider = 
+                        whisper_config["language_detection_provider"].as<std::string>("cpu");
+                    model_config.whisper.language_detection_debug = 
+                        whisper_config["language_detection_debug"].as<bool>(false);
+                }
             } else {
                 throw std::runtime_error("Unsupported model type: " + model_config.type);
             }
@@ -88,11 +104,11 @@ struct ModelConfig {
             // Load VAD configuration
             auto vad_config = config["vad"];
             model_config.vad.model_path = vad_config["model_path"].as<std::string>();
-            model_config.vad.threshold = vad_config["threshold"].as<float>(0.5f);
-            model_config.vad.min_silence_duration = vad_config["min_silence_duration"].as<float>(0.5f);
-            model_config.vad.min_speech_duration = vad_config["min_speech_duration"].as<float>(0.25f);
-            model_config.vad.max_speech_duration = vad_config["max_speech_duration"].as<float>(5.0f);
-            model_config.vad.window_size = vad_config["window_size"].as<int>(512);
+            model_config.vad.threshold = vad_config["threshold"].as<float>(0.3f);
+            model_config.vad.min_silence_duration = vad_config["min_silence_duration"].as<float>(0.25f);
+            model_config.vad.min_speech_duration = vad_config["min_speech_duration"].as<float>(0.1f);
+            model_config.vad.max_speech_duration = vad_config["max_speech_duration"].as<float>(15.0f);
+            model_config.vad.window_size = vad_config["window_size"].as<int>(256);
             model_config.vad.sample_rate = vad_config["sample_rate"].as<int>(16000);
 
             return model_config;

@@ -84,7 +84,45 @@ bool VoiceServiceImpl::InitializeRecognizer() {
     }
 
     try {
-        recognizer_ = ModelFactory::CreateModel(model_config_);
+        // For language auto-detection, we need audio samples
+        // We'll create a small stream with some initial audio data
+        const SherpaOnnxOfflineStream* stream = nullptr;
+        std::vector<float> samples;
+        
+        if ((model_config_.type == "whisper" && model_config_.whisper.language == "auto") ||
+            (model_config_.type == "sense_voice" && model_config_.sense_voice.language == "auto")) {
+            
+            // Create a temporary recognizer for getting audio samples
+            auto temp_recognizer = ModelFactory::CreateModel(model_config_);
+            if (!temp_recognizer) {
+                std::cerr << "Failed to create temporary recognizer for language detection" << std::endl;
+                return false;
+            }
+            
+            // Create a stream
+            stream = SherpaOnnxCreateOfflineStream(temp_recognizer);
+            if (!stream) {
+                std::cerr << "Failed to create stream for language detection" << std::endl;
+                SherpaOnnxDestroyOfflineRecognizer(temp_recognizer);
+                return false;
+            }
+            
+            // Get some audio samples (you might want to adjust the size)
+            const int sample_rate = 16000;  // Assuming 16kHz sample rate
+            const int duration_ms = 5000;   // 5 seconds of audio
+            samples.resize(sample_rate * duration_ms / 1000);
+            
+            // Now create the actual recognizer with language detection
+            recognizer_ = ModelFactory::CreateModel(model_config_, samples.data(), samples.size());
+            
+            // Cleanup
+            SherpaOnnxDestroyOfflineStream(stream);
+            SherpaOnnxDestroyOfflineRecognizer(temp_recognizer);
+        } else {
+            // No language detection needed
+            recognizer_ = ModelFactory::CreateModel(model_config_);
+        }
+        
         if (!recognizer_) {
             std::cerr << "Failed to create recognizer" << std::endl;
             return false;

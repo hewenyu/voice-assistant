@@ -6,25 +6,30 @@ debug: false
 # Model configuration
 model:
   # Specify the model type to use: "sense_voice" or "whisper"
-  type: "sense_voice"  
+  type: "whisper"  
 
   # SenseVoice model configuration
   sense_voice:
     model_path: "models/model.onnx"
     tokens_path: "models/tokens.txt"
-    language: "auto"  # "auto", "zh", "en", "ja", "ko", "yue"
+    language: "auto"  # "zh", "en", "ja", "ko", "yue"
     decoding_method: "greedy_search"
     use_itn: true
 
   # Whisper model configuration
   whisper:
-    encoder_path: "models/whisper/tiny.en-encoder.int8.onnx"
-    decoder_path: "models/whisper/tiny.en-decoder.int8.onnx"
-    tokens_path: "models/whisper/tiny.en-tokens.txt"
-    language: "en"  # "en", "zh", "ja", "ko", etc.
+    encoder_path: "models/whisper/tiny-encoder.int8.onnx"
+    decoder_path: "models/whisper/tiny-decoder.int8.onnx"
+    tokens_path: "models/whisper/tiny-tokens.txt"
+    language: "auto"  # "auto", "en", "zh", "ja", "ko", etc.
     task: "transcribe"  # "transcribe" or "translate"
     tail_paddings: 0
     decoding_method: "greedy_search"
+    
+    # Language detection settings (only used when language is "auto")
+    language_detection_num_threads: 1
+    language_detection_provider: "cpu"
+    language_detection_debug: false
 
 # VAD configuration
 vad:
