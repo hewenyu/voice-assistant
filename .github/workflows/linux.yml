@@ -23,7 +23,7 @@ jobs:
         apt-get update
         apt-get install -y cmake build-essential pkg-config ninja-build
         apt-get install -y autoconf libtool libgflags-dev libgtest-dev
-        apt-get install -y libc-ares-dev libyaml-cpp-dev
+        apt-get install -y libc-ares-dev libyaml-cpp-dev uuid-dev
         apt-get install -y protobuf-compiler libprotobuf-dev
         apt-get install -y libgrpc++-dev libgrpc-dev protobuf-compiler-grpc
 
