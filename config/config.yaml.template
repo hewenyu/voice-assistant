@@ -34,9 +34,11 @@ model:
 # VAD configuration
 vad:
   model_path: "models/silero_vad.onnx"
-  threshold: 0.3 
-  min_silence_duration: 0.25
-  min_speech_duration: 0.1
-  max_speech_duration: 15
-  window_size: 256
-  sample_rate: 16000
+  threshold: 0.5  # Voice detection threshold (0.0-1.0)
+  min_silence_duration: 0.5  # Minimum silence duration between speech segments (seconds)
+  min_speech_duration: 0.25  # Minimum speech segment duration (seconds)
+  max_speech_duration: 30.0  # Maximum speech segment duration (seconds)
+  window_size: 512  # Window size for processing audio (samples)
+  sample_rate: 16000  # Audio sample rate (Hz)
+  num_threads: 1  # Number of threads for VAD processing
+  debug: false  # Enable debug output for VAD

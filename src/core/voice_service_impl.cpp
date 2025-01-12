@@ -48,25 +48,29 @@ bool VoiceServiceImpl::InitializeVAD() {
               << "  threshold: " << model_config_.vad.threshold << std::endl
               << "  min_silence_duration: " << model_config_.vad.min_silence_duration << std::endl
               << "  min_speech_duration: " << model_config_.vad.min_speech_duration << std::endl
-              << "  window_size: " << model_config_.vad.window_size << std::endl;
+              << "  max_speech_duration: " << model_config_.vad.max_speech_duration << std::endl
+              << "  window_size: " << model_config_.vad.window_size << std::endl
+              << "  sample_rate: " << model_config_.vad.sample_rate << std::endl
+              << "  num_threads: " << model_config_.vad.num_threads << std::endl
+              << "  debug: " << model_config_.vad.debug << std::endl;
 
     // Zero initialization
     SherpaOnnxVadModelConfig config = {};
     vad_config_ = config;
     
-    // Configure VAD with balanced parameters
+    // Configure VAD with parameters from config
     vad_config_.silero_vad.model = model_config_.vad.model_path.c_str();
-    vad_config_.silero_vad.threshold = 0.5;  // Back to default threshold
-    vad_config_.silero_vad.min_silence_duration = 0.5;  // Default silence duration
-    vad_config_.silero_vad.min_speech_duration = 0.25;  // Minimum speech duration
-    vad_config_.silero_vad.max_speech_duration = 30.0;  // Maximum speech duration
-    vad_config_.silero_vad.window_size = 512;  // Default window size
+    vad_config_.silero_vad.threshold = model_config_.vad.threshold;
+    vad_config_.silero_vad.min_silence_duration = model_config_.vad.min_silence_duration;
+    vad_config_.silero_vad.min_speech_duration = model_config_.vad.min_speech_duration;
+    vad_config_.silero_vad.max_speech_duration = model_config_.vad.max_speech_duration;
+    vad_config_.silero_vad.window_size = model_config_.vad.window_size;
     vad_config_.sample_rate = model_config_.vad.sample_rate;
-    vad_config_.num_threads = 1;
-    vad_config_.debug = 1;
+    vad_config_.num_threads = model_config_.vad.num_threads;
+    vad_config_.debug = model_config_.vad.debug ? 1 : 0;
 
-    // Create VAD with default buffer
-    vad_ = SherpaOnnxCreateVoiceActivityDetector(&vad_config_, 30);  // Default buffer size
+    // Create VAD with default buffer size (30 seconds should be enough for most cases)
+    vad_ = SherpaOnnxCreateVoiceActivityDetector(&vad_config_, 30);
     if (!vad_) {
         std::cerr << "Failed to create VAD" << std::endl;
         return false;

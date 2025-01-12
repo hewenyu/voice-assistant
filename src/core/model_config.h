@@ -39,6 +39,8 @@ struct VadConfig {
     float max_speech_duration = 15.0;
     int window_size = 256;
     int sample_rate = 16000;
+    int num_threads = 1;
+    bool debug = false;
 };
 
 struct ModelConfig {
@@ -110,6 +112,8 @@ struct ModelConfig {
             model_config.vad.max_speech_duration = vad_config["max_speech_duration"].as<float>(15.0f);
             model_config.vad.window_size = vad_config["window_size"].as<int>(256);
             model_config.vad.sample_rate = vad_config["sample_rate"].as<int>(16000);
+            model_config.vad.num_threads = vad_config["num_threads"].as<int>(1);
+            model_config.vad.debug = vad_config["debug"].as<bool>(false);
 
             return model_config;
         } catch (const YAML::Exception& e) {
