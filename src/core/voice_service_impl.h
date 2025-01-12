@@ -78,7 +78,6 @@ private:
     );
 
     const SherpaOnnxOfflineRecognizer* recognizer_;
-    SherpaOnnxOfflineRecognizerConfig config_;
     ModelConfig model_config_;
     std::mutex mutex_;
 

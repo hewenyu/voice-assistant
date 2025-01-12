@@ -1,4 +1,5 @@
 #include "core/voice_service_impl.h"
+#include "core/model_factory.h"
 
 // C++ Standard Library
 #include <iostream>
@@ -74,36 +75,25 @@ bool VoiceServiceImpl::InitializeVAD() {
 }
 
 bool VoiceServiceImpl::InitializeRecognizer() {
-    std::cout << "Initializing recognizer with model: " << model_config_.sense_voice.model_path << std::endl;
-    
-    // Zero initialization
-    SherpaOnnxOfflineRecognizerConfig cfg = {};
-    config_ = cfg;
+    std::cout << "Initializing recognizer with model: ";
+    if (model_config_.type == "sense_voice") {
+        std::cout << model_config_.sense_voice.model_path << std::endl;
+    } else if (model_config_.type == "whisper") {
+        std::cout << model_config_.whisper.encoder_path << " and " 
+                  << model_config_.whisper.decoder_path << std::endl;
+    }
 
-    // Set model paths with zero initialization
-    SherpaOnnxOfflineSenseVoiceModelConfig sense_voice_config = {};
-    sense_voice_config.model = model_config_.sense_voice.model_path.c_str();
-    sense_voice_config.language = model_config_.sense_voice.language.c_str();
-    sense_voice_config.use_itn = model_config_.sense_voice.use_itn ? 1 : 0;
-
-    // Offline model config with zero initialization
-    SherpaOnnxOfflineModelConfig model_config = {};
-    model_config.debug = model_config_.debug ? 1 : 0;
-    model_config.num_threads = model_config_.num_threads;
-    model_config.provider = model_config_.provider.c_str();
-    model_config.tokens = model_config_.sense_voice.tokens_path.c_str();
-    model_config.sense_voice = sense_voice_config;
-
-    config_.model_config = model_config;
-    config_.decoding_method = model_config_.sense_voice.decoding_method.c_str();
-
-    // Create recognizer
-    recognizer_ = SherpaOnnxCreateOfflineRecognizer(&config_);
-    if (!recognizer_) {
-        std::cerr << "Failed to create recognizer" << std::endl;
+    try {
+        recognizer_ = ModelFactory::CreateModel(model_config_);
+        if (!recognizer_) {
+            std::cerr << "Failed to create recognizer" << std::endl;
+            return false;
+        }
+        return true;
+    } catch (const std::exception& e) {
+        std::cerr << "Failed to create recognizer: " << e.what() << std::endl;
         return false;
     }
-    return true;
 }
 
 void VoiceServiceImpl::ConvertResults(const char* text, float confidence, SpeechRecognitionResult* result) {
