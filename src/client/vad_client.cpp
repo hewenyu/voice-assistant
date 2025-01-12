@@ -125,28 +125,26 @@ int main(int argc, char* argv[]) {
                 float current_start = segment->start / 16000.0f;
                 float current_end = (segment->start + segment->n) / 16000.0f;
                 
-                // Only process if this is a new sentence (gap > 0.3s)
-                if ((current_start - last_speech_end) > 0.3) {
-                    std::cout << "Processing speech segment: " << current_start 
-                             << "s -> " << current_end << "s" << std::endl;
+                // 移除间隔检查，处理所有语音段
+                std::cout << "Processing speech segment: " << current_start 
+                         << "s -> " << current_end << "s" << std::endl;
 
-                    // Create gRPC request for this segment
-                    SyncRecognizeRequest request;
-                    request.set_audio_data(
-                        SamplesToString(segment->samples, segment->n));
+                // Create gRPC request for this segment
+                SyncRecognizeRequest request;
+                request.set_audio_data(
+                    SamplesToString(segment->samples, segment->n));
 
-                    // Call RPC
-                    SyncRecognizeResponse response;
-                    grpc::ClientContext context;
-                    grpc::Status status = stub->SyncRecognize(&context, request, &response);
+                // Call RPC
+                SyncRecognizeResponse response;
+                grpc::ClientContext context;
+                grpc::Status status = stub->SyncRecognize(&context, request, &response);
 
-                    if (status.ok()) {
-                        std::cout << "[" << current_start << "s -> " << current_end 
-                                 << "s] " << response.text() << std::endl;
-                        last_speech_end = current_end;
-                    } else {
-                        std::cerr << "RPC failed: " << status.error_message() << std::endl;
-                    }
+                if (status.ok()) {
+                    std::cout << "[" << current_start << "s -> " << current_end 
+                             << "s] " << response.text() << std::endl;
+                    last_speech_end = current_end;
+                } else {
+                    std::cerr << "RPC failed: " << status.error_message() << std::endl;
                 }
 
                 SherpaOnnxDestroySpeechSegment(segment);
