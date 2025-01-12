@@ -1,0 +1,24 @@
+# Basic configuration
+provider: "cpu"
+num_threads: 4
+debug: false
+
+# Model configuration
+model:
+  type: "sense_voice"  # 指定使用sense voice模型
+  sense_voice:
+    model_path: "models/model.onnx"
+    tokens_path: "models/tokens.txt"
+    language: "auto"
+    decoding_method: "greedy_search"
+    use_itn: true
+
+# VAD configuration
+vad:
+  model_path: "models/silero_vad.onnx"
+  threshold: 0.3 
+  min_silence_duration: 0.25
+  min_speech_duration: 0.1
+  max_speech_duration: 15
+  window_size: 256
+  sample_rate: 16000
