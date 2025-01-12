@@ -37,31 +37,30 @@ VoiceServiceImpl::~VoiceServiceImpl() {
 }
 
 bool VoiceServiceImpl::InitializeVAD() {
-    std::cout << "Initializing VAD with model: " << model_config_.vad_model_path << std::endl;
+    std::cout << "Initializing VAD with model: " << model_config_.vad.model_path << std::endl;
     std::cout << "VAD parameters:" << std::endl
-              << "  threshold: " << model_config_.vad_threshold << std::endl
-              << "  min_silence_duration: " << model_config_.vad_min_silence_duration << std::endl
-              << "  min_speech_duration: " << model_config_.vad_min_speech_duration << std::endl
-              << "  window_size: " << model_config_.vad_window_size << std::endl;
+              << "  threshold: " << model_config_.vad.threshold << std::endl
+              << "  min_silence_duration: " << model_config_.vad.min_silence_duration << std::endl
+              << "  min_speech_duration: " << model_config_.vad.min_speech_duration << std::endl
+              << "  window_size: " << model_config_.vad.window_size << std::endl;
 
     // Zero initialization
     SherpaOnnxVadModelConfig config = {};
     vad_config_ = config;
     
     // Configure VAD with more sensitive parameters
-    vad_config_.silero_vad.model = model_config_.vad_model_path.c_str();
-    vad_config_.silero_vad.threshold = 0.3;
-    vad_config_.silero_vad.min_silence_duration = 0.25;  // 0.25
-    vad_config_.silero_vad.min_speech_duration = 0.1;  // 增加最小语音持续时间，减少碎片
-    vad_config_.silero_vad.max_speech_duration = 15;  // 减少最大语音持续时间，避免过长
-    vad_config_.silero_vad.window_size = 256;  // 使用较小的窗口大小，提高实时性
-    vad_config_.sample_rate = model_config_.sample_rate;
+    vad_config_.silero_vad.model = model_config_.vad.model_path.c_str();
+    vad_config_.silero_vad.threshold = model_config_.vad.threshold;
+    vad_config_.silero_vad.min_silence_duration = model_config_.vad.min_silence_duration;
+    vad_config_.silero_vad.min_speech_duration = model_config_.vad.min_speech_duration;
+    vad_config_.silero_vad.max_speech_duration = model_config_.vad.max_speech_duration;
+    vad_config_.silero_vad.window_size = model_config_.vad.window_size;
+    vad_config_.sample_rate = model_config_.vad.sample_rate;
     vad_config_.num_threads = model_config_.num_threads;
     vad_config_.debug = model_config_.debug ? 1 : 0;
 
-
-    // 创建VAD，使用更大的初始缓冲区大小 (2M samples)
-    vad_ = SherpaOnnxCreateVoiceActivityDetector(&vad_config_, 120);  // 增加缓冲区大小
+    // Create VAD
+    vad_ = SherpaOnnxCreateVoiceActivityDetector(&vad_config_, 120);
     if (!vad_) {
         std::cerr << "Failed to create VAD" << std::endl;
         return false;
@@ -70,7 +69,7 @@ bool VoiceServiceImpl::InitializeVAD() {
 }
 
 bool VoiceServiceImpl::InitializeRecognizer() {
-    std::cout << "Initializing recognizer with model: " << model_config_.model_path << std::endl;
+    std::cout << "Initializing recognizer with model: " << model_config_.sense_voice.model_path << std::endl;
     
     // Zero initialization
     SherpaOnnxOfflineRecognizerConfig cfg = {};
@@ -78,20 +77,20 @@ bool VoiceServiceImpl::InitializeRecognizer() {
 
     // Set model paths with zero initialization
     SherpaOnnxOfflineSenseVoiceModelConfig sense_voice_config = {};
-    sense_voice_config.model = model_config_.model_path.c_str();
-    sense_voice_config.language = model_config_.language.c_str();
-    sense_voice_config.use_itn = model_config_.use_itn ? 1 : 0;
+    sense_voice_config.model = model_config_.sense_voice.model_path.c_str();
+    sense_voice_config.language = model_config_.sense_voice.language.c_str();
+    sense_voice_config.use_itn = model_config_.sense_voice.use_itn ? 1 : 0;
 
     // Offline model config with zero initialization
     SherpaOnnxOfflineModelConfig model_config = {};
     model_config.debug = model_config_.debug ? 1 : 0;
     model_config.num_threads = model_config_.num_threads;
     model_config.provider = model_config_.provider.c_str();
-    model_config.tokens = model_config_.tokens_path.c_str();
+    model_config.tokens = model_config_.sense_voice.tokens_path.c_str();
     model_config.sense_voice = sense_voice_config;
 
     config_.model_config = model_config;
-    config_.decoding_method = model_config_.decoding_method.c_str();
+    config_.decoding_method = model_config_.sense_voice.decoding_method.c_str();
 
     // Create recognizer
     recognizer_ = SherpaOnnxCreateOfflineRecognizer(&config_);
@@ -128,7 +127,7 @@ std::string VoiceServiceImpl::ProcessAudio(const std::string& audio_data) {
     // Accept audio data
     SherpaOnnxAcceptWaveformOffline(
         stream,
-        model_config_.sample_rate,
+        model_config_.vad.sample_rate,
         samples.data(),
         samples.size()
     );
@@ -213,7 +212,7 @@ void VoiceServiceImpl::ProcessStreamingAudio(
         if (is_speech && context.stream) {
             SherpaOnnxAcceptWaveformOffline(
                 context.stream,
-                model_config_.sample_rate,
+                model_config_.vad.sample_rate,
                 samples.data(),
                 samples.size()
             );
@@ -248,7 +247,7 @@ void VoiceServiceImpl::ProcessStreamingAudio(
                     // Add segment to recognition stream
                     SherpaOnnxAcceptWaveformOffline(
                         context.stream,
-                        model_config_.sample_rate,
+                        model_config_.vad.sample_rate,
                         segment->samples,
                         segment->n
                     );
