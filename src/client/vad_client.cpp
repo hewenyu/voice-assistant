@@ -78,13 +78,13 @@ int main(int argc, char* argv[]) {
     vadConfig.silero_vad.min_silence_duration = 0.25;  // Shorter silence duration
     vadConfig.silero_vad.min_speech_duration = 0.1;  // Shorter minimum speech duration
     vadConfig.silero_vad.max_speech_duration = 15;  // Shorter maximum speech duration
-    vadConfig.silero_vad.window_size = 256;  // Smaller window size for finer granularity
+    vadConfig.silero_vad.window_size = 1024;  // Smaller window size for finer granularity
     vadConfig.sample_rate = 16000;
     vadConfig.num_threads = 1;
     vadConfig.debug = 1;  // Enable debug output
 
     SherpaOnnxVoiceActivityDetector* vad = 
-        SherpaOnnxCreateVoiceActivityDetector(&vadConfig, 30);
+        SherpaOnnxCreateVoiceActivityDetector(&vadConfig, 120);  // 增加到120秒的缓冲
     if (!vad) {
         std::cerr << "Failed to create VAD" << std::endl;
         SherpaOnnxFreeWave(wave);
@@ -97,6 +97,12 @@ int main(int argc, char* argv[]) {
     bool is_eof = false;
     bool was_speech = false;  // Track previous speech state
     float last_speech_end = 0;
+    float silence_start = 0;  // 记录静音开始的时间
+    float speech_start = 0;   // 记录语音开始的时间
+    const float SILENCE_THRESHOLD = 1.0;    // 静音阈值，增加到1秒以更好地处理句子间的停顿
+    const float MIN_SPEECH_DURATION = 1.0;  // 最小语音段长度，避免过短的分段
+
+    std::vector<float> current_segment;  // 存储当前语音段的采样数据
 
     while (!is_eof) {
         if (i + window_size < wave->num_samples) {
@@ -108,47 +114,62 @@ int main(int argc, char* argv[]) {
         }
 
         bool is_speech = SherpaOnnxVoiceActivityDetectorDetected(vad);
+        float current_time = i / 16000.0f;
         
         // State transition from non-speech to speech
         if (is_speech && !was_speech) {
-            std::cout << "Speech started at: " << (i / 16000.0f) << "s" << std::endl;
+            speech_start = current_time;
+            silence_start = 0;  // 重置静音计时器
         }
         
         // State transition from speech to non-speech
         if (!is_speech && was_speech) {
-            std::cout << "Speech ended at: " << (i / 16000.0f) << "s" << std::endl;
+            silence_start = current_time;  // 记录静音开始时间
+        }
+        
+        // 只有当满足以下条件之一时才处理语音段：
+        // 1. 静音持续足够长（超过阈值）
+        // 2. 到达文件末尾
+        // 3. 当前语音段长度已经足够长
+        if ((!is_speech && was_speech && 
+             ((current_time - silence_start >= SILENCE_THRESHOLD) || 
+              is_eof || 
+              (current_time - speech_start >= MIN_SPEECH_DURATION))) ||
+            (is_eof && is_speech)) {
             
-            while (!SherpaOnnxVoiceActivityDetectorEmpty(vad)) {
-                const SherpaOnnxSpeechSegment* segment = 
-                    SherpaOnnxVoiceActivityDetectorFront(vad);
-                
-                float current_start = segment->start / 16000.0f;
-                float current_end = (segment->start + segment->n) / 16000.0f;
-                
-                // 移除间隔检查，处理所有语音段
-                std::cout << "Processing speech segment: " << current_start 
-                         << "s -> " << current_end << "s" << std::endl;
+            float segment_duration = current_time - speech_start;
+            if (segment_duration >= MIN_SPEECH_DURATION) {
+                std::cout << "Processing speech segment: " << speech_start 
+                         << "s -> " << current_time << "s" << std::endl;
 
-                // Create gRPC request for this segment
-                SyncRecognizeRequest request;
-                request.set_audio_data(
-                    SamplesToString(segment->samples, segment->n));
+                while (!SherpaOnnxVoiceActivityDetectorEmpty(vad)) {
+                    const SherpaOnnxSpeechSegment* segment = 
+                        SherpaOnnxVoiceActivityDetectorFront(vad);
+                    
+                    float current_start = segment->start / 16000.0f;
+                    float current_end = (segment->start + segment->n) / 16000.0f;
 
-                // Call RPC
-                SyncRecognizeResponse response;
-                grpc::ClientContext context;
-                grpc::Status status = stub->SyncRecognize(&context, request, &response);
+                    // Create gRPC request for this segment
+                    SyncRecognizeRequest request;
+                    request.set_audio_data(
+                        SamplesToString(segment->samples, segment->n));
 
-                if (status.ok()) {
-                    std::cout << "[" << current_start << "s -> " << current_end 
-                             << "s] " << response.text() << std::endl;
-                    last_speech_end = current_end;
-                } else {
-                    std::cerr << "RPC failed: " << status.error_message() << std::endl;
+                    // Call RPC
+                    SyncRecognizeResponse response;
+                    grpc::ClientContext context;
+                    grpc::Status status = stub->SyncRecognize(&context, request, &response);
+
+                    if (status.ok()) {
+                        std::cout << "[" << current_start << "s -> " << current_end 
+                                 << "s] " << response.text() << std::endl;
+                        last_speech_end = current_end;
+                    } else {
+                        std::cerr << "RPC failed: " << status.error_message() << std::endl;
+                    }
+
+                    SherpaOnnxDestroySpeechSegment(segment);
+                    SherpaOnnxVoiceActivityDetectorPop(vad);
                 }
-
-                SherpaOnnxDestroySpeechSegment(segment);
-                SherpaOnnxVoiceActivityDetectorPop(vad);
             }
         }
         
