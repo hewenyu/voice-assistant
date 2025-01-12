@@ -10,6 +10,9 @@
   - 日语
   - 韩语
   - 粤语
+- 支持多种识别模型：
+  - Sense Voice（适用于 CJK 语言）
+  - Whisper（适用于英语和多语言场景）
 - 基于 gRPC 的服务器-客户端架构
 - 使用 sherpa-onnx 作为语音识别引擎
 - 支持同步和流式识别模式
@@ -17,7 +20,14 @@
 
 ## 最新改进
 
-### 2024-01-xx
+### 2024-01-12
+- 添加了 Whisper 模型支持
+  - 支持自动语言检测
+  - 支持多语言识别
+  - 优化了短音频处理
+  - 提供了量化模型选项
+
+### 2024-01-11
 - 优化了 VAD 参数配置
   - 降低阈值到 0.3 提高检测灵敏度
   - 调整最小静音时长为 0.25s
@@ -37,42 +47,49 @@
 
 ```bash
 # 创建模型目录
-mkdir -p models
+mkdir -p models/whisper
 
-# 下载模型文件（以下二选一）
+# 下载 Sense Voice 模型（以下二选一）
 # 1. 标准模型（更准确，文件更大）
 wget https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.onnx -O models/model.onnx
 
 # 2. 量化模型（速度更快，文件更小）
 wget https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.int8.onnx -O models/model.int8.onnx
 
-# 下载词表文件
+# 下载 Sense Voice 词表文件
 wget https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt -O models/tokens.txt
 
+# 下载 Whisper 模型（以下二选一）
+# 1. tiny 模型（速度快，准确度适中）
+wget https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-tiny.tar.bz2
+tar xvf sherpa-onnx-whisper-tiny.tar.bz2 -C models/whisper/
+rm sherpa-onnx-whisper-tiny.tar.bz2
+
+# 2. base 模型（准确度更高，速度较慢）
+wget https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-base.tar.bz2
+tar xvf sherpa-onnx-whisper-base.tar.bz2 -C models/whisper/
+rm sherpa-onnx-whisper-base.tar.bz2
+
 # 下载 VAD 模型
-wget https://github.com/snakers4/silero-vad/raw/master/src/silero_vad/data/silero_vad.onnx -O models/vad.onnx
+wget https://github.com/snakers4/silero-vad/raw/master/src/silero_vad/data/silero_vad.onnx -O models/silero_vad.onnx
 ```
 
 ### 模型说明
 
-1. 模型类型：
+1. Sense Voice 模型：
    - `model.onnx`：标准浮点模型，准确度更高
    - `model.int8.onnx`：8位量化模型，速度更快，占用空间更小
-   - `vad.onnx`：语音活动检测模型
+   - 主要用于中文、日语、韩语和粤语识别
 
-2. 支持语言：
-   - 中文 (zh)
-   - 英语 (en)
-   - 日语 (ja)
-   - 韩语 (ko)
-   - 粤语 (yue)
+2. Whisper 模型：
+   - `tiny`：小型模型，速度快，适合一般场景
+   - `base`：基础模型，准确度更高，适合对准确度要求高的场景
+   - 支持自动语言检测
+   - 适合英语和多语言混合场景
 
-3. 模型特点：
-   - 自动语言检测
-   - 多语言混合识别
-   - 标点符号自动添加
-   - 数字智能转换
-   - 精确的语音活动检测
+3. VAD 模型：
+   - `silero_vad.onnx`：语音活动检测模型
+   - 用于准确分割语音片段
 
 ## 开发进度
 
@@ -204,12 +221,125 @@ Usage: ./voice-assistant <config_file>  # 使用配置文件启动
 
 ## 配置说明
 
-### VAD 配置
-- threshold: 语音检测阈值 (0.3)
-- min_silence_duration: 最小静音持续时间 (0.25s)
-- min_speech_duration: 最小语音持续时间 (0.1s)
-- max_speech_duration: 最大语音持续时间 (15s)
-- window_size: 处理窗口大小 (256)
+### 配置文件结构
+```yaml
+# 基础配置
+provider: "cpu"          # 推理后端：cpu 或 cuda
+num_threads: 4          # 线程数
+debug: false           # 调试模式
+
+# 模型配置
+model:
+  type: "whisper"      # 模型类型：sense_voice 或 whisper
+
+  # Sense Voice 配置
+  sense_voice:
+    model_path: "models/model.onnx"
+    tokens_path: "models/tokens.txt"
+    language: "auto"    # zh, en, ja, ko, yue
+    decoding_method: "greedy_search"
+    use_itn: true
+
+  # Whisper 配置
+  whisper:
+    encoder_path: "models/whisper/tiny-encoder.int8.onnx"
+    decoder_path: "models/whisper/tiny-decoder.int8.onnx"
+    tokens_path: "models/whisper/tiny-tokens.txt"
+    language: "auto"    # auto, en, zh, ja, ko 等
+    task: "transcribe"  # transcribe 或 translate
+    tail_paddings: 2000 # 处理短音频的填充
+    decoding_method: "greedy_search"
+
+# VAD 配置
+vad:
+  model_path: "models/silero_vad.onnx"
+  threshold: 0.3 
+  min_silence_duration: 0.25
+  min_speech_duration: 0.1
+  max_speech_duration: 15
+  window_size: 256
+  sample_rate: 16000
+```
+
+### 配置说明
+
+1. 基础配置
+   - `provider`: 选择推理后端，支持 "cpu" 或 "cuda"
+   - `num_threads`: CPU 线程数，建议设置为 CPU 核心数
+   - `debug`: 是否启用调试模式，输出更多日志信息
+
+2. 模型配置
+   - `type`: 选择使用的模型类型
+     - `sense_voice`: 适用于中日韩粤语识别
+     - `whisper`: 适用于英语和多语言场景
+
+3. Sense Voice 配置
+   - `model_path`: 模型文件路径
+   - `tokens_path`: 词表文件路径
+   - `language`: 识别语言，支持 "auto"、"zh"、"en"、"ja"、"ko"、"yue"
+   - `decoding_method`: 解码方法，目前支持 "greedy_search"
+   - `use_itn`: 是否启用智能数字转换
+
+4. Whisper 配置
+   - `encoder_path`: 编码器模型路径
+   - `decoder_path`: 解码器模型路径
+   - `tokens_path`: 词表文件路径
+   - `language`: 识别语言，支持 "auto" 和多种语言代码
+   - `task`: 任务类型，支持 "transcribe"（转写）和 "translate"（翻译）
+   - `tail_paddings`: 短音频处理的填充长度，建议设置为 2000
+   - `decoding_method`: 解码方法，目前支持 "greedy_search"
+
+5. VAD 配置
+   - `model_path`: VAD 模型路径
+   - `threshold`: 语音检测阈值，范围 0-1，越小越敏感
+   - `min_silence_duration`: 最小静音持续时间（秒）
+   - `min_speech_duration`: 最小语音持续时间（秒）
+   - `max_speech_duration`: 最大语音持续时间（秒）
+   - `window_size`: 处理窗口大小，影响实时性
+   - `sample_rate`: 采样率，固定为 16000
+
+### 配置示例
+
+1. 英语识别优化配置：
+```yaml
+model:
+  type: "whisper"
+  whisper:
+    encoder_path: "models/whisper/base-encoder.onnx"  # 使用 base 模型提高准确度
+    decoder_path: "models/whisper/base-decoder.onnx"
+    tokens_path: "models/whisper/base-tokens.txt"
+    language: "en"      # 固定为英语提高性能
+    tail_paddings: 2000
+```
+
+2. 中日韩识别优化配置：
+```yaml
+model:
+  type: "sense_voice"
+  sense_voice:
+    model_path: "models/model.onnx"    # 使用标准模型提高准确度
+    tokens_path: "models/tokens.txt"
+    language: "auto"    # 自动检测语言
+    use_itn: true      # 启用智能数字转换
+```
+
+3. 实时性能优化配置：
+```yaml
+provider: "cpu"
+num_threads: 4         # 根据 CPU 核心数调整
+
+model:
+  type: "whisper"
+  whisper:
+    encoder_path: "models/whisper/tiny-encoder.int8.onnx"  # 使用量化模型
+    decoder_path: "models/whisper/tiny-decoder.int8.onnx"
+    language: "auto"
+
+vad:
+  threshold: 0.3
+  min_silence_duration: 0.2  # 缩短静音判断时间
+  window_size: 256          # 使用较小的窗口
+```
 
 ## 许可证
 
