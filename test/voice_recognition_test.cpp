@@ -7,6 +7,12 @@
 #include <chrono>
 #include <thread>
 
+using voice::VoiceService;
+using voice::SyncRecognizeRequest;
+using voice::SyncRecognizeResponse;
+using voice::RecognitionConfig;
+using voice::AudioEncoding;
+
 class VoiceRecognitionTest : public ::testing::Test {
 protected:
     void SetUp() override {
@@ -60,7 +66,11 @@ protected:
         }
 
         SyncRecognizeRequest request;
-        request.set_audio_data(audio_data);
+        auto* config = request.mutable_config();
+        config->set_encoding(AudioEncoding::LINEAR16);
+        config->set_sample_rate_hertz(16000);
+        config->set_language_code("auto");
+        request.set_audio_content(audio_data);
 
         SyncRecognizeResponse response;
         grpc::ClientContext context;
@@ -72,17 +82,24 @@ protected:
         }
 
         std::cout << "\nTesting file: " << filename << std::endl;
-        std::cout << "Got result: " << response.text() << std::endl;
-        std::cout << "Expected to contain: " << expected_text << std::endl;
+        
+        if (response.results_size() > 0 && response.results(0).alternatives_size() > 0) {
+            std::string result = response.results(0).alternatives(0).transcript();
+            std::cout << "Got result: " << result << std::endl;
+            std::cout << "Expected to contain: " << expected_text << std::endl;
 
-        // 检查识别结果是否包含预期文本
-        bool contains_expected = response.text().find(expected_text) != std::string::npos;
-        EXPECT_TRUE(contains_expected) 
-            << "Expected text not found in recognition result.\n"
-            << "Expected to contain: " << expected_text << "\n"
-            << "Got: " << response.text();
+            // 检查识别结果是否包含预期文本
+            bool contains_expected = result.find(expected_text) != std::string::npos;
+            EXPECT_TRUE(contains_expected) 
+                << "Expected text not found in recognition result.\n"
+                << "Expected to contain: " << expected_text << "\n"
+                << "Got: " << result;
 
-        return contains_expected;
+            return contains_expected;
+        }
+
+        std::cout << "No recognition results received" << std::endl;
+        return false;
     }
 
     std::shared_ptr<grpc::Channel> channel_;

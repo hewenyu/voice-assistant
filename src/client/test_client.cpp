@@ -58,5 +58,8 @@ int main(int argc, char* argv[]) {
     // Print result
     std::cout << "Recognition result: " << response.text() << std::endl;
 
+    // 输出grpc response
+    std::cout << "Response: " << response.DebugString() << std::endl;
+    
     return 0;
 } 

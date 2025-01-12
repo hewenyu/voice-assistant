@@ -5,6 +5,8 @@
 #include <fstream>
 #include <stdexcept>
 
+namespace voice {
+
 struct ModelConfig {
     // Basic configuration
     std::string provider = "cpu";
@@ -169,3 +171,5 @@ struct ModelConfig {
         }
     }
 }; 
+
+} // namespace voice 

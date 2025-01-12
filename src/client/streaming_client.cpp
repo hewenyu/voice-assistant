@@ -5,6 +5,10 @@
 #include <thread>
 #include <chrono>
 
+using voice::VoiceService;
+using voice::StreamingRecognizeRequest;
+using voice::StreamingRecognizeResponse;
+
 // Preprocess audio file using sox
 std::string PreprocessAudio(const std::string& input_file) {
     std::string output_file = input_file + ".16k.wav";
@@ -64,11 +68,29 @@ public:
         std::thread reader([stream]() {
             StreamingRecognizeResponse response;
             while (stream->Read(&response)) {
-                std::cout << "Recognition " 
-                         << (response.is_final() ? "(final): " : "(interim): ")
-                         << response.text() << std::endl;
+                for (const auto& result : response.results()) {
+                    if (result.alternatives_size() > 0) {
+                        std::cout << "Recognition " 
+                                 << (result.is_final() ? "(final): " : "(interim): ")
+                                 << result.alternatives(0).transcript() << std::endl;
+                    }
+                }
             }
         });
+
+        // 发送配置
+        StreamingRecognizeRequest config_request;
+        auto* streaming_config = config_request.mutable_streaming_config();
+        auto* config = streaming_config->mutable_config();
+        config->set_encoding(voice::AudioEncoding::LINEAR16);
+        config->set_sample_rate_hertz(16000);
+        config->set_language_code("en-US");
+        streaming_config->set_interim_results(true);
+
+        if (!stream->Write(config_request)) {
+            std::cerr << "Failed to write config" << std::endl;
+            return;
+        }
 
         // 模拟实时发送音频数据
         // 每次发送1s的音频 (16kHz * 2bytes * 1s)
@@ -76,7 +98,7 @@ public:
         for (size_t i = 0; i < audio_data.size(); i += chunk_size) {
             StreamingRecognizeRequest request;
             size_t current_chunk_size = std::min(chunk_size, audio_data.size() - i);
-            request.set_audio_data(audio_data.substr(i, current_chunk_size));
+            request.set_audio_content(audio_data.substr(i, current_chunk_size));
             
             if (!stream->Write(request)) {
                 break;

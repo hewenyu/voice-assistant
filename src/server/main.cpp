@@ -5,6 +5,9 @@
 #include "core/voice_service_impl.h"
 #include "core/model_config.h"
 
+using voice::VoiceServiceImpl;
+using voice::ModelConfig;
+
 void PrintUsage(const char* program) {
     std::cerr << "Usage: " << program << " <config_file>" << std::endl;
 }

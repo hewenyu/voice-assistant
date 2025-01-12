@@ -76,6 +76,7 @@ target_link_libraries(voice_service_core
     sherpa-onnx-c-api
     sherpa-onnx-cxx-api
     yaml-cpp
+    uuid
 )
 
 # Server executable

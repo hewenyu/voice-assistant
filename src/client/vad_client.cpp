@@ -6,6 +6,12 @@
 #include "voice_service.grpc.pb.h"
 #include "sherpa-onnx/c-api/c-api.h"
 
+using voice::VoiceService;
+using voice::SyncRecognizeRequest;
+using voice::SyncRecognizeResponse;
+using voice::RecognitionConfig;
+using voice::AudioEncoding;
+
 // Convert float samples to int16 samples and then to string
 std::string SamplesToString(const float* samples, int32_t n) {
     // Convert to int16
@@ -151,8 +157,11 @@ int main(int argc, char* argv[]) {
 
                     // Create gRPC request for this segment
                     SyncRecognizeRequest request;
-                    request.set_audio_data(
-                        SamplesToString(segment->samples, segment->n));
+                    auto* config = request.mutable_config();
+                    config->set_encoding(AudioEncoding::LINEAR16);
+                    config->set_sample_rate_hertz(16000);
+                    config->set_language_code("en-US");
+                    request.set_audio_content(SamplesToString(segment->samples, segment->n));
 
                     // Call RPC
                     SyncRecognizeResponse response;
@@ -160,8 +169,12 @@ int main(int argc, char* argv[]) {
                     grpc::Status status = stub->SyncRecognize(&context, request, &response);
 
                     if (status.ok()) {
-                        std::cout << "[" << current_start << "s -> " << current_end 
-                                 << "s] " << response.text() << std::endl;
+                        if (response.results_size() > 0 && 
+                            response.results(0).alternatives_size() > 0) {
+                            std::cout << "[" << current_start << "s -> " << current_end 
+                                     << "s] " << response.results(0).alternatives(0).transcript() 
+                                     << std::endl;
+                        }
                         last_speech_end = current_end;
                     } else {
                         std::cerr << "RPC failed: " << status.error_message() << std::endl;
