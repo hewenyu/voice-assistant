@@ -57,10 +57,8 @@ private:
         bool is_initialized = false;
         StreamingRecognitionConfig config;
         const SherpaOnnxOfflineStream* stream = nullptr;
-        std::vector<SpeechRecognitionAlternative> alternatives;
         bool has_speech = false;
         bool was_speech = false;
-        int continuous_silence_chunks = 0;
         float stability = 0.0;
     };
 
@@ -79,7 +77,7 @@ private:
 
     const SherpaOnnxOfflineRecognizer* recognizer_;
     ModelConfig model_config_;
-    std::mutex mutex_;
+    std::mutex mutex_;  // General mutex for thread safety
 
     // VAD related members
     SherpaOnnxVoiceActivityDetector* vad_;
@@ -88,6 +86,9 @@ private:
     // Async operation storage
     std::map<std::string, AsyncOperation> async_operations_;
     std::mutex async_mutex_;
+
+    // Recognition mutex for thread safety during model inference
+    std::mutex recognition_mutex_;
 };
 
 } // namespace voice 

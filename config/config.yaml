@@ -6,7 +6,7 @@ debug: false
 # Model configuration
 model:
   # Specify the model type to use: "sense_voice" or "whisper"
-  type: "whisper"  
+  type: "sense_voice"  
 
   # SenseVoice model configuration
   sense_voice:
