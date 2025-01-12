@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstring>
 #include <uuid/uuid.h>
+#include <sstream>
 
 namespace voice {
 
@@ -109,6 +110,33 @@ void VoiceServiceImpl::ConvertResults(const char* text, float confidence, Speech
     auto* alternative = result->add_alternatives();
     alternative->set_transcript(text);
     alternative->set_confidence(confidence);
+
+    // 如果有词级别时间戳信息，添加到结果中
+    if (text && *text) {
+        std::string transcript(text);
+        std::istringstream iss(transcript);
+        std::string word;
+        float start_time = 0.0f;
+        const float word_duration = 0.3f;  // 假设每个词的持续时间为0.3秒
+
+        while (iss >> word) {
+            auto* word_info = alternative->add_words();
+            word_info->set_word(word);
+            
+            // 设置开始时间
+            auto* start = word_info->mutable_start_time();
+            start->set_seconds(static_cast<int64_t>(start_time));
+            start->set_nanos(static_cast<int32_t>((start_time - static_cast<int64_t>(start_time)) * 1e9));
+            
+            // 设置结束时间
+            float end_time = start_time + word_duration;
+            auto* end = word_info->mutable_end_time();
+            end->set_seconds(static_cast<int64_t>(end_time));
+            end->set_nanos(static_cast<int32_t>((end_time - static_cast<int64_t>(end_time)) * 1e9));
+            
+            start_time = end_time;
+        }
+    }
 }
 
 std::vector<SpeechRecognitionResult> VoiceServiceImpl::ProcessAudio(
@@ -122,40 +150,157 @@ std::vector<SpeechRecognitionResult> VoiceServiceImpl::ProcessAudio(
 
     std::cout << "Processing audio data size: " << audio_data.size() << " bytes" << std::endl;
 
+    // Convert audio data to float
+    std::vector<float> samples(audio_data.size() / 2);
+    const int16_t* audio_samples = reinterpret_cast<const int16_t*>(audio_data.data());
+    for (size_t i = 0; i < samples.size(); ++i) {
+        samples[i] = static_cast<float>(audio_samples[i]) / 32768.0f;
+    }
+
+    // Create a stream to process the entire audio
     const SherpaOnnxOfflineStream* stream = SherpaOnnxCreateOfflineStream(recognizer_);
     if (!stream) {
         return results;
     }
 
-    // Convert audio data from int16 to float32
-    std::vector<float> samples;
-    samples.resize(audio_data.size() / 2);
-    const int16_t* int16_data = reinterpret_cast<const int16_t*>(audio_data.data());
-    for (size_t i = 0; i < samples.size(); ++i) {
-        samples[i] = int16_data[i] / 32768.0f;
-    }
-
-    SherpaOnnxAcceptWaveformOffline(
-        stream,
-        config.sample_rate_hertz(),
-        samples.data(),
-        samples.size()
-    );
-
+    // Process the entire audio
+    SherpaOnnxAcceptWaveformOffline(stream, model_config_.vad.sample_rate, samples.data(), samples.size());
     SherpaOnnxDecodeOfflineStream(recognizer_, stream);
 
-    const SherpaOnnxOfflineRecognizerResult* sherpa_result = 
-        SherpaOnnxGetOfflineStreamResult(stream);
+    const SherpaOnnxOfflineRecognizerResult* result = SherpaOnnxGetOfflineStreamResult(stream);
+    if (result && result->text) {
+        SpeechRecognitionResult recognition_result;
+        auto* alternative = recognition_result.add_alternatives();
+        
+        // Process text while preserving UTF-8 encoding and adding spaces
+        std::string text = result->text;
+        std::string clean_text;
+        const char* ptr = text.c_str();
+        bool need_space = false;
 
-    if (sherpa_result && sherpa_result->text) {
-        SpeechRecognitionResult result;
-        ConvertResults(sherpa_result->text, 0.9, &result);
-        results.push_back(result);
+        while (*ptr) {
+            if (static_cast<unsigned char>(*ptr) < 0x80) {
+                // ASCII character
+                if (*ptr == '.' || *ptr == ',' || *ptr == ' ') {
+                    // Skip punctuation but add space if needed
+                    if (need_space && !clean_text.empty() && clean_text.back() != ' ') {
+                        clean_text += ' ';
+                    }
+                    need_space = false;
+                } else {
+                    if (need_space && !clean_text.empty() && clean_text.back() != ' ') {
+                        clean_text += ' ';
+                    }
+                    clean_text += *ptr;
+                    need_space = true;
+                }
+                ptr++;
+            } else {
+                // UTF-8 character
+                int len = 1;
+                if ((static_cast<unsigned char>(*ptr) & 0xE0) == 0xC0) len = 2;
+                else if ((static_cast<unsigned char>(*ptr) & 0xF0) == 0xE0) len = 3;
+                else if ((static_cast<unsigned char>(*ptr) & 0xF8) == 0xF0) len = 4;
+                
+                // Skip Chinese/Japanese punctuation marks
+                bool is_punctuation = false;
+                if (len == 3) {
+                    const char* punct = ptr;
+                    if ((static_cast<unsigned char>(punct[0]) == 0xE3 && 
+                         static_cast<unsigned char>(punct[1]) == 0x80 && 
+                         static_cast<unsigned char>(punct[2]) == 0x82) || // 。
+                        (static_cast<unsigned char>(punct[0]) == 0xEF && 
+                         static_cast<unsigned char>(punct[1]) == 0xBC && 
+                         static_cast<unsigned char>(punct[2]) == 0x8C) || // ，
+                        (static_cast<unsigned char>(punct[0]) == 0xE3 && 
+                         static_cast<unsigned char>(punct[1]) == 0x80 && 
+                         static_cast<unsigned char>(punct[2]) == 0x81)) { // 、
+                        is_punctuation = true;
+                    }
+                }
+                
+                if (!is_punctuation) {
+                    clean_text.append(ptr, len);
+                }
+                ptr += len;
+            }
+        }
+        
+        alternative->set_transcript(clean_text);
+        alternative->set_confidence(1.0f);
+
+        // Add word-level timestamps
+        float total_duration = static_cast<float>(samples.size()) / model_config_.vad.sample_rate;
+        float current_time = 0.0f;
+        
+        // Split text into words
+        std::vector<std::string> words;
+        std::string current_word;
+        const char* word_ptr = clean_text.c_str();
+        
+        while (*word_ptr) {
+            if (static_cast<unsigned char>(*word_ptr) < 0x80) {
+                // ASCII character
+                if (*word_ptr == ' ') {
+                    if (!current_word.empty()) {
+                        words.push_back(current_word);
+                        current_word.clear();
+                    }
+                } else {
+                    current_word += *word_ptr;
+                }
+                word_ptr++;
+            } else {
+                // UTF-8 character
+                int len = 1;
+                if ((static_cast<unsigned char>(*word_ptr) & 0xE0) == 0xC0) len = 2;
+                else if ((static_cast<unsigned char>(*word_ptr) & 0xF0) == 0xE0) len = 3;
+                else if ((static_cast<unsigned char>(*word_ptr) & 0xF8) == 0xF0) len = 4;
+                
+                if (!current_word.empty()) {
+                    words.push_back(current_word);
+                    current_word.clear();
+                }
+                
+                current_word.append(word_ptr, len);
+                words.push_back(current_word);
+                current_word.clear();
+                
+                word_ptr += len;
+            }
+        }
+        
+        if (!current_word.empty()) {
+            words.push_back(current_word);
+        }
+        
+        // Add timestamps for each word
+        if (!words.empty()) {
+            float word_duration = total_duration / words.size();
+            
+            for (const auto& word : words) {
+                auto* word_info = alternative->add_words();
+                word_info->set_word(word);
+                
+                auto* start = word_info->mutable_start_time();
+                start->set_seconds(static_cast<int64_t>(current_time));
+                start->set_nanos(static_cast<int32_t>((current_time - 
+                    static_cast<int64_t>(current_time)) * 1e9));
+                
+                float end_time = current_time + word_duration;
+                auto* end = word_info->mutable_end_time();
+                end->set_seconds(static_cast<int64_t>(end_time));
+                end->set_nanos(static_cast<int32_t>((end_time - 
+                    static_cast<int64_t>(end_time)) * 1e9));
+                
+                current_time = end_time;
+            }
+        }
+
+        results.push_back(recognition_result);
     }
 
-    SherpaOnnxDestroyOfflineRecognizerResult(sherpa_result);
     SherpaOnnxDestroyOfflineStream(stream);
-
     return results;
 }
 
