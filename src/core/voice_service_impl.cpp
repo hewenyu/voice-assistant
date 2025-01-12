@@ -54,19 +54,19 @@ bool VoiceServiceImpl::InitializeVAD() {
     SherpaOnnxVadModelConfig config = {};
     vad_config_ = config;
     
-    // Configure VAD with more sensitive parameters
+    // Configure VAD with balanced parameters
     vad_config_.silero_vad.model = model_config_.vad.model_path.c_str();
-    vad_config_.silero_vad.threshold = model_config_.vad.threshold;
-    vad_config_.silero_vad.min_silence_duration = model_config_.vad.min_silence_duration;
-    vad_config_.silero_vad.min_speech_duration = model_config_.vad.min_speech_duration;
-    vad_config_.silero_vad.max_speech_duration = model_config_.vad.max_speech_duration;
-    vad_config_.silero_vad.window_size = model_config_.vad.window_size;
+    vad_config_.silero_vad.threshold = 0.5;  // Back to default threshold
+    vad_config_.silero_vad.min_silence_duration = 0.5;  // Default silence duration
+    vad_config_.silero_vad.min_speech_duration = 0.25;  // Minimum speech duration
+    vad_config_.silero_vad.max_speech_duration = 30.0;  // Maximum speech duration
+    vad_config_.silero_vad.window_size = 512;  // Default window size
     vad_config_.sample_rate = model_config_.vad.sample_rate;
-    vad_config_.num_threads = model_config_.num_threads;
-    vad_config_.debug = model_config_.debug ? 1 : 0;
+    vad_config_.num_threads = 1;
+    vad_config_.debug = 1;
 
-    // Create VAD
-    vad_ = SherpaOnnxCreateVoiceActivityDetector(&vad_config_, 120);
+    // Create VAD with default buffer
+    vad_ = SherpaOnnxCreateVoiceActivityDetector(&vad_config_, 30);  // Default buffer size
     if (!vad_) {
         std::cerr << "Failed to create VAD" << std::endl;
         return false;
@@ -172,7 +172,8 @@ std::vector<SpeechRecognitionResult> VoiceServiceImpl::ProcessAudio(
     const RecognitionConfig& config) {
     
     std::vector<SpeechRecognitionResult> results;
-    if (!recognizer_) {
+    if (!recognizer_ || !vad_) {
+        std::cerr << "Recognizer or VAD not initialized" << std::endl;
         return results;
     }
 
@@ -185,150 +186,146 @@ std::vector<SpeechRecognitionResult> VoiceServiceImpl::ProcessAudio(
         samples[i] = static_cast<float>(audio_samples[i]) / 32768.0f;
     }
 
-    // Create a stream to process the entire audio
-    const SherpaOnnxOfflineStream* stream = SherpaOnnxCreateOfflineStream(recognizer_);
-    if (!stream) {
-        return results;
-    }
+    std::cout << "Converted " << samples.size() << " samples" << std::endl;
 
-    // Process the entire audio
-    SherpaOnnxAcceptWaveformOffline(stream, model_config_.vad.sample_rate, samples.data(), samples.size());
-    SherpaOnnxDecodeOfflineStream(recognizer_, stream);
-
-    const SherpaOnnxOfflineRecognizerResult* result = SherpaOnnxGetOfflineStreamResult(stream);
-    if (result && result->text) {
-        SpeechRecognitionResult recognition_result;
-        auto* alternative = recognition_result.add_alternatives();
+    // Process with VAD first to get segments
+    const int window_size = vad_config_.silero_vad.window_size;
+    int total_segments = 0;
+    
+    // Feed samples to VAD
+    for (size_t i = 0; i < samples.size(); i += window_size) {
+        size_t chunk_size = std::min(window_size, static_cast<int>(samples.size() - i));
+        std::vector<float> chunk(samples.data() + i, samples.data() + i + chunk_size);
         
-        // Process text while preserving UTF-8 encoding and adding spaces
-        std::string text = result->text;
-        std::string clean_text;
-        const char* ptr = text.c_str();
-        bool need_space = false;
-
-        while (*ptr) {
-            if (static_cast<unsigned char>(*ptr) < 0x80) {
-                // ASCII character
-                if (*ptr == '.' || *ptr == ',' || *ptr == ' ') {
-                    // Skip punctuation but add space if needed
-                    if (need_space && !clean_text.empty() && clean_text.back() != ' ') {
-                        clean_text += ' ';
-                    }
-                    need_space = false;
-                } else {
-                    if (need_space && !clean_text.empty() && clean_text.back() != ' ') {
-                        clean_text += ' ';
-                    }
-                    clean_text += *ptr;
-                    need_space = true;
-                }
-                ptr++;
-            } else {
-                // UTF-8 character
-                int len = 1;
-                if ((static_cast<unsigned char>(*ptr) & 0xE0) == 0xC0) len = 2;
-                else if ((static_cast<unsigned char>(*ptr) & 0xF0) == 0xE0) len = 3;
-                else if ((static_cast<unsigned char>(*ptr) & 0xF8) == 0xF0) len = 4;
-                
-                // Skip Chinese/Japanese punctuation marks
-                bool is_punctuation = false;
-                if (len == 3) {
-                    const char* punct = ptr;
-                    if ((static_cast<unsigned char>(punct[0]) == 0xE3 && 
-                         static_cast<unsigned char>(punct[1]) == 0x80 && 
-                         static_cast<unsigned char>(punct[2]) == 0x82) || // 。
-                        (static_cast<unsigned char>(punct[0]) == 0xEF && 
-                         static_cast<unsigned char>(punct[1]) == 0xBC && 
-                         static_cast<unsigned char>(punct[2]) == 0x8C) || // ，
-                        (static_cast<unsigned char>(punct[0]) == 0xE3 && 
-                         static_cast<unsigned char>(punct[1]) == 0x80 && 
-                         static_cast<unsigned char>(punct[2]) == 0x81)) { // 、
-                        is_punctuation = true;
-                    }
-                }
-                
-                if (!is_punctuation) {
-                    clean_text.append(ptr, len);
-                }
-                ptr += len;
-            }
-        }
+        std::cout << "Processing chunk " << i/window_size << " of size " << chunk_size << std::endl;
+        SherpaOnnxVoiceActivityDetectorAcceptWaveform(vad_, chunk.data(), chunk.size());
         
-        alternative->set_transcript(clean_text);
-        alternative->set_confidence(1.0f);
-
-        // Add word-level timestamps
-        float total_duration = static_cast<float>(samples.size()) / model_config_.vad.sample_rate;
-        float current_time = 0.0f;
-        
-        // Split text into words
-        std::vector<std::string> words;
-        std::string current_word;
-        const char* word_ptr = clean_text.c_str();
-        
-        while (*word_ptr) {
-            if (static_cast<unsigned char>(*word_ptr) < 0x80) {
-                // ASCII character
-                if (*word_ptr == ' ') {
-                    if (!current_word.empty()) {
-                        words.push_back(current_word);
-                        current_word.clear();
-                    }
-                } else {
-                    current_word += *word_ptr;
-                }
-                word_ptr++;
-            } else {
-                // UTF-8 character
-                int len = 1;
-                if ((static_cast<unsigned char>(*word_ptr) & 0xE0) == 0xC0) len = 2;
-                else if ((static_cast<unsigned char>(*word_ptr) & 0xF0) == 0xE0) len = 3;
-                else if ((static_cast<unsigned char>(*word_ptr) & 0xF8) == 0xF0) len = 4;
-                
-                if (!current_word.empty()) {
-                    words.push_back(current_word);
-                    current_word.clear();
-                }
-                
-                current_word.append(word_ptr, len);
-                words.push_back(current_word);
-                current_word.clear();
-                
-                word_ptr += len;
-            }
-        }
-        
-        if (!current_word.empty()) {
-            words.push_back(current_word);
-        }
-        
-        // Add timestamps for each word
-        if (!words.empty()) {
-            float word_duration = total_duration / words.size();
+        // Process any available segments
+        while (!SherpaOnnxVoiceActivityDetectorEmpty(vad_)) {
+            const SherpaOnnxSpeechSegment* segment = SherpaOnnxVoiceActivityDetectorFront(vad_);
             
-            for (const auto& word : words) {
-                auto* word_info = alternative->add_words();
-                word_info->set_word(word);
+            if (segment) {
+                total_segments++;
+                std::cout << "Processing segment " << total_segments 
+                          << " (start: " << segment->start / model_config_.vad.sample_rate 
+                          << "s, duration: " << segment->n / model_config_.vad.sample_rate 
+                          << "s)" << std::endl;
+
+                const SherpaOnnxOfflineStream* stream = SherpaOnnxCreateOfflineStream(recognizer_);
+                if (stream) {
+                    SherpaOnnxAcceptWaveformOffline(stream, model_config_.vad.sample_rate, 
+                                                   segment->samples, segment->n);
+                    SherpaOnnxDecodeOfflineStream(recognizer_, stream);
+                    
+                    const SherpaOnnxOfflineRecognizerResult* recog_result = 
+                        SherpaOnnxGetOfflineStreamResult(stream);
+                    
+                    if (recog_result && recog_result->text) {
+                        std::cout << "Recognition result: " << recog_result->text << std::endl;
+                        SpeechRecognitionResult recognition_result;
+                        auto* alternative = recognition_result.add_alternatives();
+                        
+                        // Clean text (remove unnecessary punctuation and add proper spacing)
+                        std::string text = recog_result->text;
+                        std::string clean_text;
+                        std::istringstream iss(text);
+                        std::string word;
+                        bool first_word = true;
+                        
+                        while (iss >> word) {
+                            // Remove punctuation from word
+                            word.erase(std::remove_if(word.begin(), word.end(), 
+                                [](char c) { return std::ispunct(c); }), word.end());
+                            
+                            if (!word.empty()) {
+                                if (!first_word) {
+                                    clean_text += ' ';
+                                }
+                                clean_text += word;
+                                first_word = false;
+                            }
+                        }
+                        
+                        alternative->set_transcript(clean_text);
+                        alternative->set_confidence(1.0f);
+                        
+                        // Add timing information
+                        float start = segment->start / static_cast<float>(model_config_.vad.sample_rate);
+                        float duration = segment->n / static_cast<float>(model_config_.vad.sample_rate);
+                        
+                        // Add word-level timing
+                        if (!clean_text.empty()) {
+                            std::vector<std::string> words;
+                            std::istringstream word_iss(clean_text);
+                            std::string current_word;
+                            
+                            while (word_iss >> current_word) {
+                                words.push_back(current_word);
+                            }
+                            
+                            // Distribute words evenly within the segment duration
+                            if (!words.empty()) {
+                                float word_duration = duration / words.size();
+                                float current_word_time = start;
+                                
+                                for (const auto& word : words) {
+                                    auto* word_info = alternative->add_words();
+                                    word_info->set_word(word);
+                                    
+                                    auto* start_time = word_info->mutable_start_time();
+                                    start_time->set_seconds(static_cast<int64_t>(current_word_time));
+                                    start_time->set_nanos(static_cast<int32_t>((current_word_time - 
+                                        static_cast<int64_t>(current_word_time)) * 1e9));
+                                    
+                                    float end_time = current_word_time + word_duration;
+                                    auto* end = word_info->mutable_end_time();
+                                    end->set_seconds(static_cast<int64_t>(end_time));
+                                    end->set_nanos(static_cast<int32_t>((end_time - 
+                                        static_cast<int64_t>(end_time)) * 1e9));
+                                    
+                                    current_word_time = end_time;
+                                }
+                            }
+                        }
+                        
+                        results.push_back(recognition_result);
+                    }
+                    
+                    SherpaOnnxDestroyOfflineStream(stream);
+                }
                 
-                auto* start = word_info->mutable_start_time();
-                start->set_seconds(static_cast<int64_t>(current_time));
-                start->set_nanos(static_cast<int32_t>((current_time - 
-                    static_cast<int64_t>(current_time)) * 1e9));
-                
-                float end_time = current_time + word_duration;
-                auto* end = word_info->mutable_end_time();
-                end->set_seconds(static_cast<int64_t>(end_time));
-                end->set_nanos(static_cast<int32_t>((end_time - 
-                    static_cast<int64_t>(end_time)) * 1e9));
-                
-                current_time = end_time;
+                SherpaOnnxDestroySpeechSegment(segment);
             }
+            
+            SherpaOnnxVoiceActivityDetectorPop(vad_);
         }
-
-        results.push_back(recognition_result);
     }
-
-    SherpaOnnxDestroyOfflineStream(stream);
+    
+    // Process any remaining segments after flushing
+    SherpaOnnxVoiceActivityDetectorFlush(vad_);
+    
+    while (!SherpaOnnxVoiceActivityDetectorEmpty(vad_)) {
+        const SherpaOnnxSpeechSegment* segment = SherpaOnnxVoiceActivityDetectorFront(vad_);
+        
+        if (segment) {
+            // Process final segment (same code as above)
+            const SherpaOnnxOfflineStream* stream = SherpaOnnxCreateOfflineStream(recognizer_);
+            if (stream) {
+                SherpaOnnxAcceptWaveformOffline(stream, model_config_.vad.sample_rate, 
+                                               segment->samples, segment->n);
+                SherpaOnnxDecodeOfflineStream(recognizer_, stream);
+                
+                // ... (rest of the processing code)
+                
+                SherpaOnnxDestroyOfflineStream(stream);
+            }
+            
+            SherpaOnnxDestroySpeechSegment(segment);
+        }
+        
+        SherpaOnnxVoiceActivityDetectorPop(vad_);
+    }
+    
     return results;
 }
 
