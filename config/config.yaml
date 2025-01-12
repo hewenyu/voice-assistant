@@ -1,0 +1,42 @@
+# Basic configuration
+provider: "cpu"
+num_threads: 4
+debug: false
+
+# Model configuration
+model:
+  # Specify the model type to use: "sense_voice" or "whisper"
+  type: "whisper"  
+
+  # SenseVoice model configuration
+  sense_voice:
+    model_path: "models/model.onnx"
+    tokens_path: "models/tokens.txt"
+    language: "auto"  # "zh", "en", "ja", "ko", "yue"
+    decoding_method: "greedy_search"
+    use_itn: true
+
+  # Whisper model configuration
+  whisper:
+    encoder_path: "models/whisper/tiny-encoder.int8.onnx"
+    decoder_path: "models/whisper/tiny-decoder.int8.onnx"
+    tokens_path: "models/whisper/tiny-tokens.txt"
+    language: "auto"  # "auto", "en", "zh", "ja", "ko", etc.
+    task: "transcribe"  # "transcribe" or "translate"
+    tail_paddings: 0
+    decoding_method: "greedy_search"
+    
+    # Language detection settings (only used when language is "auto")
+    language_detection_num_threads: 1
+    language_detection_provider: "cpu"
+    language_detection_debug: false
+
+# VAD configuration
+vad:
+  model_path: "models/silero_vad.onnx"
+  threshold: 0.3 
+  min_silence_duration: 0.25
+  min_speech_duration: 0.1
+  max_speech_duration: 15
+  window_size: 256
+  sample_rate: 16000

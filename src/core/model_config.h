@@ -1,99 +1,177 @@
 #pragma once
 
 #include <string>
+#include <yaml-cpp/yaml.h>
+#include <fstream>
+#include <stdexcept>
 
-struct ModelConfig {
-    // Basic model configuration
+namespace voice {
+
+struct WhisperConfig {
+    std::string encoder_path;
+    std::string decoder_path;
+    std::string tokens_path;
+    std::string language = "en";  // "en", "zh", "ja", "ko", etc.
+    std::string task = "transcribe";  // "transcribe" or "translate"
+    int tail_paddings = 0;
+    std::string decoding_method = "greedy_search";
+    
+    // Language detection settings
+    bool enable_language_detection = false;  // Only used when language is "auto"
+    int language_detection_num_threads = 1;
+    std::string language_detection_provider = "cpu";
+    bool language_detection_debug = false;
+};
+
+struct SenseVoiceConfig {
     std::string model_path;
     std::string tokens_path;
-    std::string language = "auto";
-    std::string provider = "cpu";
+    std::string language = "auto";  // "auto", "zh", "en", "ja", "ko", "yue"
     std::string decoding_method = "greedy_search";
+    bool use_itn = true;
+};
+
+struct VadConfig {
+    std::string model_path;
+    float threshold = 0.3;
+    float min_silence_duration = 0.25;
+    float min_speech_duration = 0.1;
+    float max_speech_duration = 15.0;
+    int window_size = 256;
+    int sample_rate = 16000;
+};
+
+struct ModelConfig {
+    std::string type;  // "sense_voice" or "whisper"
+    std::string provider = "cpu";
     int num_threads = 4;
     bool debug = false;
-    bool use_itn = true;
 
-    // VAD configuration
-    std::string vad_model_path;
-    float vad_threshold = 0.5f;
-    float vad_min_silence_duration = 0.5f;
-    float vad_min_speech_duration = 0.25f;
-    float vad_max_speech_duration = 5.0f;
-    int vad_window_size = 512;
-    int sample_rate = 16000;
+    // Model specific configurations
+    WhisperConfig whisper;
+    SenseVoiceConfig sense_voice;
+    VadConfig vad;
 
-    // Error checking and validation
-    bool validate() const {
-        // Check required paths
-        if (model_path.empty() || tokens_path.empty() || vad_model_path.empty()) {
-            return false;
+    // Load configuration from YAML file
+    static ModelConfig LoadFromFile(const std::string& config_path) {
+        try {
+            YAML::Node config = YAML::LoadFile(config_path);
+            ModelConfig model_config;
+
+            // Load basic configuration
+            model_config.provider = config["provider"].as<std::string>("cpu");
+            model_config.num_threads = config["num_threads"].as<int>(4);
+            model_config.debug = config["debug"].as<bool>(false);
+
+            // Load model type
+            if (!config["model"] || !config["model"]["type"]) {
+                throw std::runtime_error("Model type must be specified");
+            }
+            model_config.type = config["model"]["type"].as<std::string>();
+
+            // Load model-specific configuration
+            if (model_config.type == "sense_voice") {
+                auto sense_voice_config = config["model"]["sense_voice"];
+                model_config.sense_voice.model_path = sense_voice_config["model_path"].as<std::string>();
+                model_config.sense_voice.tokens_path = sense_voice_config["tokens_path"].as<std::string>();
+                model_config.sense_voice.language = sense_voice_config["language"].as<std::string>("auto");
+                model_config.sense_voice.decoding_method = sense_voice_config["decoding_method"].as<std::string>("greedy_search");
+                model_config.sense_voice.use_itn = sense_voice_config["use_itn"].as<bool>(true);
+            } else if (model_config.type == "whisper") {
+                auto whisper_config = config["model"]["whisper"];
+                model_config.whisper.encoder_path = whisper_config["encoder_path"].as<std::string>();
+                model_config.whisper.decoder_path = whisper_config["decoder_path"].as<std::string>();
+                model_config.whisper.tokens_path = whisper_config["tokens_path"].as<std::string>();
+                model_config.whisper.language = whisper_config["language"].as<std::string>("en");
+                model_config.whisper.task = whisper_config["task"].as<std::string>("transcribe");
+                model_config.whisper.tail_paddings = whisper_config["tail_paddings"].as<int>(0);
+                model_config.whisper.decoding_method = whisper_config["decoding_method"].as<std::string>("greedy_search");
+                
+                // Load language detection settings if language is "auto"
+                if (model_config.whisper.language == "auto") {
+                    model_config.whisper.enable_language_detection = true;
+                    model_config.whisper.language_detection_num_threads = 
+                        whisper_config["language_detection_num_threads"].as<int>(1);
+                    model_config.whisper.language_detection_provider = 
+                        whisper_config["language_detection_provider"].as<std::string>("cpu");
+                    model_config.whisper.language_detection_debug = 
+                        whisper_config["language_detection_debug"].as<bool>(false);
+                }
+            } else {
+                throw std::runtime_error("Unsupported model type: " + model_config.type);
+            }
+
+            // Load VAD configuration
+            auto vad_config = config["vad"];
+            model_config.vad.model_path = vad_config["model_path"].as<std::string>();
+            model_config.vad.threshold = vad_config["threshold"].as<float>(0.3f);
+            model_config.vad.min_silence_duration = vad_config["min_silence_duration"].as<float>(0.25f);
+            model_config.vad.min_speech_duration = vad_config["min_speech_duration"].as<float>(0.1f);
+            model_config.vad.max_speech_duration = vad_config["max_speech_duration"].as<float>(15.0f);
+            model_config.vad.window_size = vad_config["window_size"].as<int>(256);
+            model_config.vad.sample_rate = vad_config["sample_rate"].as<int>(16000);
+
+            return model_config;
+        } catch (const YAML::Exception& e) {
+            throw std::runtime_error("Failed to parse config file: " + std::string(e.what()));
         }
-
-        // Check VAD parameters
-        if (vad_threshold < 0.0f || vad_threshold > 1.0f) {
-            return false;
-        }
-
-        if (vad_min_silence_duration < 0.0f || vad_min_speech_duration < 0.0f || 
-            vad_max_speech_duration < vad_min_speech_duration) {
-            return false;
-        }
-
-        if (vad_window_size <= 0 || (vad_window_size & (vad_window_size - 1)) != 0) {
-            // window_size should be positive and power of 2
-            return false;
-        }
-
-        if (sample_rate <= 0) {
-            return false;
-        }
-
-        if (num_threads <= 0) {
-            return false;
-        }
-
-        return true;
     }
 
-    std::string get_error_message() const {
+    std::string Validate() const {
         std::string error;
 
-        // Check required paths
-        if (model_path.empty()) {
-            error += "Model path is empty\n";
+        // Validate model type
+        if (type != "sense_voice" && type != "whisper") {
+            error += "Model type must be either 'sense_voice' or 'whisper'\n";
         }
-        if (tokens_path.empty()) {
-            error += "Tokens path is empty\n";
+
+        // Validate model-specific configuration
+        if (type == "sense_voice") {
+            if (sense_voice.model_path.empty()) {
+                error += "SenseVoice model path is empty\n";
+            }
+            if (sense_voice.tokens_path.empty()) {
+                error += "SenseVoice tokens path is empty\n";
+            }
+        } else if (type == "whisper") {
+            if (whisper.encoder_path.empty()) {
+                error += "Whisper encoder path is empty\n";
+            }
+            if (whisper.decoder_path.empty()) {
+                error += "Whisper decoder path is empty\n";
+            }
+            if (whisper.tokens_path.empty()) {
+                error += "Whisper tokens path is empty\n";
+            }
+            if (whisper.task != "transcribe" && whisper.task != "translate") {
+                error += "Whisper task must be either 'transcribe' or 'translate'\n";
+            }
         }
-        if (vad_model_path.empty()) {
+
+        // Validate VAD configuration
+        if (vad.model_path.empty()) {
             error += "VAD model path is empty\n";
         }
-
-        // Check VAD parameters
-        if (vad_threshold < 0.0f || vad_threshold > 1.0f) {
+        if (vad.threshold < 0.0f || vad.threshold > 1.0f) {
             error += "VAD threshold should be between 0.0 and 1.0\n";
         }
-
-        if (vad_min_silence_duration < 0.0f) {
+        if (vad.min_silence_duration < 0.0f) {
             error += "Minimum silence duration should be positive\n";
         }
-        if (vad_min_speech_duration < 0.0f) {
+        if (vad.min_speech_duration < 0.0f) {
             error += "Minimum speech duration should be positive\n";
         }
-        if (vad_max_speech_duration < vad_min_speech_duration) {
+        if (vad.max_speech_duration < vad.min_speech_duration) {
             error += "Maximum speech duration should be greater than minimum speech duration\n";
         }
-
-        if (vad_window_size <= 0) {
+        if (vad.window_size <= 0) {
             error += "Window size should be positive\n";
-        } else if ((vad_window_size & (vad_window_size - 1)) != 0) {
+        } else if ((vad.window_size & (vad.window_size - 1)) != 0) {
             error += "Window size should be a power of 2\n";
         }
-
-        if (sample_rate <= 0) {
+        if (vad.sample_rate <= 0) {
             error += "Sample rate should be positive\n";
         }
-
         if (num_threads <= 0) {
             error += "Number of threads should be positive\n";
         }
@@ -102,17 +180,36 @@ struct ModelConfig {
     }
 
     void set_defaults() {
-        if (language.empty()) {
-            language = "auto";
+        if (type.empty()) {
+            type = "sense_voice";
         }
         if (provider.empty()) {
             provider = "cpu";
         }
-        if (decoding_method.empty()) {
-            decoding_method = "greedy_search";
-        }
         if (num_threads <= 0) {
             num_threads = 4;
         }
+
+        // Set model-specific defaults
+        if (type == "sense_voice") {
+            if (sense_voice.language.empty()) {
+                sense_voice.language = "auto";
+            }
+            if (sense_voice.decoding_method.empty()) {
+                sense_voice.decoding_method = "greedy_search";
+            }
+        } else if (type == "whisper") {
+            if (whisper.language.empty()) {
+                whisper.language = "en";
+            }
+            if (whisper.task.empty()) {
+                whisper.task = "transcribe";
+            }
+            if (whisper.decoding_method.empty()) {
+                whisper.decoding_method = "greedy_search";
+            }
+        }
     }
 }; 
+
+} // namespace voice 

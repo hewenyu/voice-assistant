@@ -1,6 +1,7 @@
 # Find required packages
 find_package(Protobuf REQUIRED)
 find_package(gRPC REQUIRED)
+find_package(yaml-cpp REQUIRED)
 
 # Set protobuf options
 set(PROTOBUF_USE_STATIC_LIBS ON)
@@ -74,6 +75,8 @@ target_link_libraries(voice_service_core
     voice_service_proto
     sherpa-onnx-c-api
     sherpa-onnx-cxx-api
+    yaml-cpp
+    uuid
 )
 
 # Server executable
@@ -90,6 +93,7 @@ target_include_directories(voice_server
 target_link_libraries(voice_server
     PRIVATE
     voice_service_core
+    yaml-cpp
 )
 
 # Client executable
@@ -136,4 +140,6 @@ target_link_libraries(vad_client
 set_target_properties(voice_server PROPERTIES
     BUILD_WITH_INSTALL_RPATH TRUE
     INSTALL_RPATH "${SHERPA_ONNX_LIB_DIR}"
-) 
+)
+
+# Main voice-assistant executabl
