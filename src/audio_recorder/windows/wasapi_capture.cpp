@@ -1,6 +1,6 @@
 #include "wasapi_capture.h"
 #include <iostream>
-#include <functiondiscoverykeys_devpkey.h>
+#include <psapi.h>
 
 namespace voice {
 
@@ -21,9 +21,12 @@ WasapiCapture::WasapiCapture(const std::string& config_path)
     , device_(nullptr)
     , audio_client_(nullptr)
     , capture_client_(nullptr)
+    , session_manager_(nullptr)
+    , session_enumerator_(nullptr)
     , is_recording_(false)
     , should_stop_(false)
-    , wave_format_(nullptr) {
+    , wave_format_(nullptr)
+    , current_session_(nullptr) {
     
     // 设置默认音频格式
     format_ = AudioFormat(16000, 1, 16);  // 16kHz, mono, 16-bit
@@ -51,6 +54,21 @@ void WasapiCapture::cleanup() {
     if (audio_client_) {
         audio_client_->Release();
         audio_client_ = nullptr;
+    }
+
+    if (current_session_) {
+        current_session_->Release();
+        current_session_ = nullptr;
+    }
+
+    if (session_enumerator_) {
+        session_enumerator_->Release();
+        session_enumerator_ = nullptr;
+    }
+
+    if (session_manager_) {
+        session_manager_->Release();
+        session_manager_ = nullptr;
     }
 
     if (device_) {
@@ -89,16 +107,143 @@ bool WasapiCapture::initialize() {
         return false;
     }
 
-    return initialize_audio_client();
-}
-
-bool WasapiCapture::initialize_audio_client() {
-    HRESULT hr = device_->Activate(
-        __uuidof(IAudioClient),
+    // 获取会话管理器
+    hr = device_->Activate(
+        __uuidof(IAudioSessionManager2),
         CLSCTX_ALL,
         nullptr,
-        (void**)&audio_client_
+        (void**)&session_manager_
     );
+
+    if (FAILED(hr)) {
+        std::cerr << "Failed to get session manager" << std::endl;
+        return false;
+    }
+
+    return enumerate_applications();
+}
+
+bool WasapiCapture::get_application_name(DWORD process_id, std::wstring& name) {
+    HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, process_id);
+    if (!process) {
+        return false;
+    }
+
+    WCHAR path[MAX_PATH];
+    DWORD size = MAX_PATH;
+    if (!QueryFullProcessImageNameW(process, 0, path, &size)) {
+        CloseHandle(process);
+        return false;
+    }
+
+    WCHAR* filename = wcsrchr(path, L'\\');
+    if (filename) {
+        name = filename + 1;
+    } else {
+        name = path;
+    }
+
+    CloseHandle(process);
+    return true;
+}
+
+bool WasapiCapture::enumerate_applications() {
+    available_sessions_.clear();
+
+    // 获取会话枚举器
+    HRESULT hr = session_manager_->GetSessionEnumerator(&session_enumerator_);
+    if (FAILED(hr)) {
+        std::cerr << "Failed to get session enumerator" << std::endl;
+        return false;
+    }
+
+    int session_count;
+    hr = session_enumerator_->GetCount(&session_count);
+    if (FAILED(hr)) {
+        std::cerr << "Failed to get session count" << std::endl;
+        return false;
+    }
+
+    // 添加系统音频作为ID 0
+    AudioSessionInfo system_audio;
+    system_audio.name = L"System Audio";
+    system_audio.identifier = L"system";
+    system_audio.process_id = 0;
+    available_sessions_[0] = system_audio;
+
+    // 枚举所有音频会话
+    for (int i = 0; i < session_count; i++) {
+        IAudioSessionControl* session_control = nullptr;
+        hr = session_enumerator_->GetSession(i, &session_control);
+        if (FAILED(hr)) continue;
+
+        IAudioSessionControl2* session_control2 = nullptr;
+        hr = session_control->QueryInterface(__uuidof(IAudioSessionControl2), (void**)&session_control2);
+        session_control->Release();
+        if (FAILED(hr)) continue;
+
+        DWORD process_id;
+        hr = session_control2->GetProcessId(&process_id);
+        if (SUCCEEDED(hr) && process_id != 0) {
+            AudioSessionInfo session;
+            session.process_id = process_id;
+            session.control = session_control2;
+
+            // 获取会话标识符
+            LPWSTR session_id;
+            hr = session_control2->GetSessionInstanceIdentifier(&session_id);
+            if (SUCCEEDED(hr)) {
+                session.identifier = session_id;
+                CoTaskMemFree(session_id);
+            }
+
+            // 获取应用程序名称
+            if (get_application_name(process_id, session.name)) {
+                available_sessions_[process_id] = std::move(session);
+            } else {
+                session_control2->Release();
+            }
+        } else {
+            session_control2->Release();
+        }
+    }
+
+    return true;
+}
+
+void WasapiCapture::list_applications() {
+    enumerate_applications();
+    std::cout << "Available audio sources:" << std::endl;
+    for (const auto& session : available_sessions_) {
+        std::wcout << "ID: " << session.first 
+                  << ", Name: " << session.second.name 
+                  << std::endl;
+    }
+}
+
+bool WasapiCapture::setup_session_capture(const AudioSessionInfo& session) {
+    HRESULT hr;
+
+    // 如果是系统音频
+    if (session.process_id == 0) {
+        hr = device_->Activate(
+            __uuidof(IAudioClient),
+            CLSCTX_ALL,
+            nullptr,
+            (void**)&audio_client_
+        );
+    } else {
+        // 获取会话音频客户端
+        IAudioSessionControl2* control = session.control;
+        if (!control) return false;
+
+        hr = device_->Activate(
+            __uuidof(IAudioClient),
+            CLSCTX_ALL,
+            nullptr,
+            (void**)&audio_client_
+        );
+    }
 
     if (FAILED(hr)) {
         std::cerr << "Failed to activate audio client" << std::endl;
@@ -115,7 +260,7 @@ bool WasapiCapture::initialize_audio_client() {
     REFERENCE_TIME requested_duration = 10000000;  // 1秒 = 10,000,000 百纳秒
     hr = audio_client_->Initialize(
         AUDCLNT_SHAREMODE_SHARED,
-        AUDCLNT_STREAMFLAGS_LOOPBACK,  // 捕获渲染音频
+        session.process_id == 0 ? AUDCLNT_STREAMFLAGS_LOOPBACK : 0,
         requested_duration,
         0,
         wave_format_,
@@ -136,6 +281,45 @@ bool WasapiCapture::initialize_audio_client() {
         std::cerr << "Failed to get capture client" << std::endl;
         return false;
     }
+
+    return true;
+}
+
+bool WasapiCapture::start_recording_application(uint32_t app_id,
+                                              const std::string& output_path) {
+    if (is_recording_) {
+        std::cerr << "Already recording" << std::endl;
+        return false;
+    }
+
+    auto it = available_sessions_.find(app_id);
+    if (it == available_sessions_.end()) {
+        std::cerr << "Application ID not found" << std::endl;
+        return false;
+    }
+
+    if (!setup_session_capture(it->second)) {
+        std::cerr << "Failed to setup session capture" << std::endl;
+        return false;
+    }
+
+    if (!output_path.empty()) {
+        wav_writer_ = std::make_unique<WavWriter>();
+        AudioFormat output_format(
+            wave_format_->nSamplesPerSec,
+            wave_format_->nChannels,
+            wave_format_->wBitsPerSample
+        );
+        
+        if (!wav_writer_->open(output_path, output_format)) {
+            std::cerr << "Failed to open output file" << std::endl;
+            return false;
+        }
+    }
+
+    should_stop_ = false;
+    is_recording_ = true;
+    capture_thread_ = std::thread(&WasapiCapture::capture_thread_proc, this);
 
     return true;
 }
@@ -188,56 +372,6 @@ void WasapiCapture::capture_thread_proc() {
     }
 
     audio_client_->Stop();
-}
-
-bool WasapiCapture::enumerate_applications() {
-    // Windows不提供直接的应用程序音频流枚举
-    // 这里我们只能获取默认音频设备
-    available_applications_.clear();
-    available_applications_[0] = "System Audio";
-    return true;
-}
-
-void WasapiCapture::list_applications() {
-    enumerate_applications();
-    std::cout << "Available audio sources:" << std::endl;
-    for (const auto& app : available_applications_) {
-        std::cout << "ID: " << app.first << ", Name: " << app.second << std::endl;
-    }
-}
-
-bool WasapiCapture::start_recording_application(uint32_t app_id,
-                                              const std::string& output_path) {
-    if (is_recording_) {
-        std::cerr << "Already recording" << std::endl;
-        return false;
-    }
-
-    // 在Windows中，我们只支持系统音频捕获
-    if (app_id != 0) {
-        std::cerr << "Only system audio capture is supported on Windows" << std::endl;
-        return false;
-    }
-
-    if (!output_path.empty()) {
-        wav_writer_ = std::make_unique<WavWriter>();
-        AudioFormat output_format(
-            wave_format_->nSamplesPerSec,
-            wave_format_->nChannels,
-            wave_format_->wBitsPerSample
-        );
-        
-        if (!wav_writer_->open(output_path, output_format)) {
-            std::cerr << "Failed to open output file" << std::endl;
-            return false;
-        }
-    }
-
-    should_stop_ = false;
-    is_recording_ = true;
-    capture_thread_ = std::thread(&WasapiCapture::capture_thread_proc, this);
-
-    return true;
 }
 
 void WasapiCapture::stop_recording() {
