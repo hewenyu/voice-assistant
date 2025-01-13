@@ -1,58 +1,75 @@
 #include "audio_capture.cpp"
-#include <fstream>
-#include <chrono>
-#include <thread>
-#include <csignal>
 #include <iostream>
+#include <string>
+#include <csignal>
+#include <cstring>
+#include <thread>
+#include <chrono>
 
 static bool running = true;
 
-void signal_handler(int signal) {
+void signal_handler(int sig) {
     running = false;
 }
 
-int main(int argc, char* argv[]) {
-    if (argc != 2) {
-        std::cerr << "Usage: " << argv[0] << " <application_name>" << std::endl;
+void print_usage(const char* program) {
+    std::cout << "Usage: " << program << " [options]\n"
+              << "Options:\n"
+              << "  -l, --list     List available applications\n"
+              << "  -i, --index N  Record audio from application with index N\n"
+              << "  -h, --help     Show this help message\n";
+}
+
+int main(int argc, char *argv[]) {
+    if (argc < 2) {
+        print_usage(argv[0]);
         return 1;
     }
 
-    // Set up signal handler for clean exit
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
 
-    // Create audio capture instance
-    AudioCapture capture(argv[1]);
-    
-    // Open output file
-    std::ofstream outfile("output.raw", std::ios::binary);
-    if (!outfile) {
-        std::cerr << "Failed to open output file" << std::endl;
-        return 1;
-    }
+    try {
+        AudioCapture capture;
 
-    // Start recording
-    if (!capture.start()) {
-        std::cerr << "Failed to start recording" << std::endl;
-        return 1;
-    }
-
-    std::cout << "Recording started. Press Ctrl+C to stop." << std::endl;
-
-    // Recording loop
-    const size_t BUFFER_SIZE = 4096;  // 4KB buffer
-    while (running) {
-        auto buffer = capture.capture_audio(BUFFER_SIZE);
-        if (!buffer.empty()) {
-            outfile.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
+        // Parse command line arguments
+        for (int i = 1; i < argc; i++) {
+            if (strcmp(argv[i], "-l") == 0 || strcmp(argv[i], "--list") == 0) {
+                capture.list_applications();
+                const auto& apps = capture.get_available_applications();
+                if (apps.empty()) {
+                    std::cout << "No applications playing audio found.\n";
+                }
+                return 0;
+            }
+            else if ((strcmp(argv[i], "-i") == 0 || strcmp(argv[i], "--index") == 0) && i + 1 < argc) {
+                uint32_t index = std::stoul(argv[++i]);
+                capture.start_recording_application(index);
+                std::cout << "Recording started. Press Ctrl+C to stop.\n";
+                
+                while (running) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+                
+                capture.stop_recording();
+                std::cout << "\nRecording stopped.\n";
+                return 0;
+            }
+            else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
+                print_usage(argv[0]);
+                return 0;
+            }
+            else {
+                std::cerr << "Unknown option: " << argv[i] << "\n";
+                print_usage(argv[0]);
+                return 1;
+            }
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));  // Small sleep to prevent busy waiting
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return 1;
     }
 
-    // Clean up
-    capture.stop();
-    outfile.close();
-
-    std::cout << "\nRecording stopped." << std::endl;
     return 0;
 } 

@@ -9,31 +9,19 @@ endif()
 # Find PulseAudio package
 find_package(PulseAudio REQUIRED)
 
-# Create audio recorder library
-add_library(audio_recorder_lib
-    audio_capture.cpp
-)
-
-# Set up library
-target_link_libraries(audio_recorder_lib 
-    PUBLIC 
-    PulseAudio::PulseAudio
-)
-
-target_include_directories(audio_recorder_lib 
-    PUBLIC 
-    ${CMAKE_CURRENT_SOURCE_DIR}
-)
-
-# Create executable
-add_executable(audio_recorder 
+add_executable(audio_recorder
     main.cpp
 )
 
-# Link executable with library
-target_link_libraries(audio_recorder 
-    PRIVATE 
-    audio_recorder_lib
+target_link_libraries(audio_recorder
+    PRIVATE
+    ${PULSEAUDIO_LIBRARIES}
+    pthread
+)
+
+target_include_directories(audio_recorder
+    PRIVATE
+    ${PULSEAUDIO_INCLUDE_DIRS}
 )
 
 # Install targets
