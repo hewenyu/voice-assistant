@@ -144,6 +144,7 @@ private:
     }
     
     static void stream_read_cb(pa_stream *s, size_t length, void *userdata) {
+        std::cout << "stream_read_cb called with length: " << length << std::endl;
         auto *ac = static_cast<AudioCapture*>(userdata);
         const void *data;
         size_t bytes;
@@ -152,6 +153,8 @@ private:
             std::cerr << "Failed to read from stream" << std::endl;
             return;
         }
+        
+        std::cout << "stream_peek returned bytes: " << bytes << ", data ptr: " << data << std::endl;
         
         if (!data) {
             if (bytes > 0) {
@@ -162,23 +165,29 @@ private:
         }
         
         if (bytes > 0 && ac->is_recording) {
+            std::cout << "Processing " << bytes << " bytes of audio data" << std::endl;
             // Convert audio data to the required format (16kHz, mono, S16LE)
             const int16_t *samples = static_cast<const int16_t*>(data);
             size_t num_samples = bytes / sizeof(int16_t);
             
+            std::cout << "Number of samples: " << num_samples << std::endl;
+            
             // If stereo, convert to mono by averaging channels
             if (ac->source_spec.channels == 2) {
+                std::cout << "Converting stereo to mono" << std::endl;
                 for (size_t i = 0; i < num_samples; i += 2) {
                     int32_t mono_sample = (static_cast<int32_t>(samples[i]) + 
                                          static_cast<int32_t>(samples[i + 1])) / 2;
                     ac->audio_buffer.push_back(static_cast<int16_t>(mono_sample));
                 }
             } else {
+                std::cout << "Copying mono samples directly" << std::endl;
                 ac->audio_buffer.insert(ac->audio_buffer.end(), samples, samples + num_samples);
             }
             
             // Resample if needed (simple linear resampling)
             if (ac->source_spec.rate != SAMPLE_RATE) {
+                std::cout << "Resampling from " << ac->source_spec.rate << " to " << SAMPLE_RATE << std::endl;
                 std::vector<int16_t> resampled;
                 float ratio = static_cast<float>(SAMPLE_RATE) / ac->source_spec.rate;
                 size_t new_size = static_cast<size_t>(ac->audio_buffer.size() * ratio);
@@ -201,9 +210,12 @@ private:
                 ac->audio_buffer = std::move(resampled);
             }
             
+            std::cout << "Final buffer size: " << ac->audio_buffer.size() << " samples" << std::endl;
+            
             // Handle output based on mode
             if (ac->output_mode_ == OutputMode::FILE || ac->output_mode_ == OutputMode::BOTH) {
                 if (ac->output_file_.is_open()) {
+                    std::cout << "Writing to file" << std::endl;
                     ac->output_file_.write(reinterpret_cast<const char*>(ac->audio_buffer.data()), 
                                          ac->audio_buffer.size() * sizeof(int16_t));
                     ac->output_file_.flush();  // Make sure data is written to disk
@@ -212,6 +224,7 @@ private:
             
             if (ac->output_mode_ == OutputMode::MODEL || ac->output_mode_ == OutputMode::BOTH) {
                 if (ac->recognition_enabled_) {
+                    std::cout << "Processing audio for recognition" << std::endl;
                     ac->process_audio_for_recognition(ac->audio_buffer);
                 }
             }
@@ -394,12 +407,15 @@ public:
     }
     
     void start_recording_application(uint32_t sink_input_index, const std::string& output_path = "") {
+        std::cout << "Starting recording for sink input " << sink_input_index << std::endl;
+        
         if (stream_) {
             throw std::runtime_error("Already recording");
         }
 
         // Open output file if in FILE or BOTH mode
         if ((output_mode_ == OutputMode::FILE || output_mode_ == OutputMode::BOTH) && !output_path.empty()) {
+            std::cout << "Opening output file: " << output_path << std::endl;
             output_file_.open(output_path, std::ios::binary);
             if (!output_file_.is_open()) {
                 throw std::runtime_error("Failed to open output file: " + output_path);
@@ -407,11 +423,15 @@ public:
         }
 
         pa_threaded_mainloop_lock(mainloop_);
+        std::cout << "Mainloop locked" << std::endl;
 
         // Set up source format
         source_spec.format = PA_SAMPLE_S16LE;
         source_spec.channels = 2;  // Default to stereo
-        source_spec.rate = 16000;  // Default to 44.1kHz
+        source_spec.rate = 44100;  // Default to 44.1kHz
+        
+        std::cout << "Source format: " << source_spec.rate << "Hz, " 
+                  << source_spec.channels << " channels" << std::endl;
         
         // Create stream
         stream_ = pa_stream_new(context_, "RecordStream", &source_spec, nullptr);
@@ -419,6 +439,7 @@ public:
             pa_threaded_mainloop_unlock(mainloop_);
             throw std::runtime_error("Failed to create stream");
         }
+        std::cout << "Stream created" << std::endl;
         
         pa_stream_set_state_callback(stream_, stream_state_cb, mainloop_);
         pa_stream_set_read_callback(stream_, stream_read_cb, this);
@@ -431,24 +452,34 @@ public:
         buffer_attr.prebuf = (uint32_t)-1;
         buffer_attr.tlength = (uint32_t)-1;
         
+        std::cout << "Buffer attributes set up with fragsize: " << buffer_attr.fragsize << std::endl;
+        
         // Get the sink name for this application
         bool found = false;
         std::string sink_name;
         
-        auto get_sink_cb = [](pa_context *c, const pa_sink_input_info *i, int eol, void *userdata) {
-            if (!eol && i) {
-                auto *data = static_cast<std::pair<bool*, std::string*>*>(userdata);
-                *data->first = true;
-                *data->second = i->sink;
-            }
-            auto *mainloop = static_cast<AudioCapture*>(
-                static_cast<std::pair<AudioCapture*, std::pair<bool*, std::string*>*>*>(userdata)->first
-            )->mainloop_;
-            pa_threaded_mainloop_signal(mainloop, 0);
+        std::cout << "Getting sink info for input " << sink_input_index << std::endl;
+
+        struct CallbackData {
+            AudioCapture* ac;
+            bool* found;
+            std::string* sink_name;
         };
         
-        auto sink_data = std::make_pair(&found, &sink_name);
-        std::pair<AudioCapture*, std::pair<bool*, std::string*>*> cb_data = {this, &sink_data};
+        auto get_sink_cb = [](pa_context *c, const pa_sink_input_info *i, int eol, void *userdata) {
+            std::cout << "Sink info callback called with eol: " << eol << std::endl;
+            auto* data = static_cast<CallbackData*>(userdata);
+            
+            if (!eol && i) {
+                *data->found = true;
+                *data->sink_name = i->sink;
+                std::cout << "Found sink: " << i->sink << std::endl;
+            }
+            
+            pa_threaded_mainloop_signal(data->ac->mainloop_, 0);
+        };
+        
+        CallbackData cb_data{this, &found, &sink_name};
         
         pa_operation *op = pa_context_get_sink_input_info(context_, sink_input_index, get_sink_cb, &cb_data);
         if (!op) {
@@ -456,6 +487,8 @@ public:
             pa_threaded_mainloop_unlock(mainloop_);
             throw std::runtime_error("Failed to get sink input info");
         }
+        
+        std::cout << "Waiting for sink info operation to complete" << std::endl;
         
         while (pa_operation_get_state(op) == PA_OPERATION_RUNNING) {
             pa_threaded_mainloop_wait(mainloop_);
@@ -468,8 +501,11 @@ public:
             throw std::runtime_error("Failed to find sink for application");
         }
         
+        std::cout << "Found sink: " << sink_name << std::endl;
+        
         // Connect to the monitor source of the sink
         std::string monitor_source = sink_name + ".monitor";
+        std::cout << "Connecting to monitor source: " << monitor_source << std::endl;
         
         if (pa_stream_connect_record(stream_, monitor_source.c_str(), &buffer_attr,
             static_cast<pa_stream_flags_t>(PA_STREAM_ADJUST_LATENCY | PA_STREAM_AUTO_TIMING_UPDATE)) < 0) {
@@ -478,11 +514,14 @@ public:
             throw std::runtime_error("Failed to connect stream");
         }
         
+        std::cout << "Stream connected successfully" << std::endl;
+        
         pa_threaded_mainloop_unlock(mainloop_);
         is_recording = true;
         
         // Clear any existing audio data
         audio_buffer.clear();
+        std::cout << "Recording started" << std::endl;
     }
     
     void stop_recording() {
