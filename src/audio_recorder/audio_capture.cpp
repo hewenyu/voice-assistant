@@ -206,7 +206,11 @@ private:
                             
                             // 如果有语言标识，也输出
                             if (result->lang) {
-                                std::cout << "Language: " << result->lang << std::endl;
+                                // std::cout << "Language: " << result->lang << std::endl;
+                                // Language: <|zh|>
+                                // 提取语言代码
+                                std::string language_code = std::string(result->lang).substr(2, 2);
+                                std::cout << "Language Code: " << language_code << std::endl;
                             }
                             
                             // 如果有 tokens，也输出
