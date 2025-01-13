@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <iostream>
+#include <iomanip>
 #include <memory>
 #include <chrono>
 #include <map>
@@ -26,7 +27,7 @@ struct WavHeader {
     uint32_t fmt_chunk_size = 16;
     uint16_t audio_format = 1;    // PCM = 1
     uint16_t num_channels = 2;    // Stereo = 2
-    uint32_t sample_rate = 44100;
+    uint32_t sample_rate = 16000;
     uint32_t byte_rate = 0;       // Will be calculated
     uint16_t sample_alignment = 0; // Will be calculated
     uint16_t bit_depth = 16;      // 16 bits per sample
@@ -35,7 +36,7 @@ struct WavHeader {
     char data_header[4] = {'d', 'a', 't', 'a'};
     uint32_t data_bytes = 0;      // Will be filled later
     
-    WavHeader(uint16_t channels = 2, uint32_t rate = 44100) {
+    WavHeader(uint16_t channels = 2, uint32_t rate = 16000) {
         num_channels = channels;
         sample_rate = rate;
         sample_alignment = num_channels * (bit_depth / 8);
@@ -76,6 +77,7 @@ private:
     SherpaOnnxVoiceActivityDetector* vad_;
     std::mutex recognition_mutex_;
     bool recognition_enabled_;
+    std::vector<float> remaining_samples_;  // Buffer for remaining samples between VAD windows
     
     std::map<std::string, std::string> available_sources;
     std::map<uint32_t, std::string> available_applications;
@@ -135,7 +137,7 @@ private:
 
     // Process audio data for recognition
     void process_audio_for_recognition(const std::vector<int16_t>& audio_data) {
-        if (!recognition_enabled_ || !recognizer_ || !recognition_stream_) {
+        if (!recognition_enabled_ || !vad_) {
             return;
         }
 
@@ -147,18 +149,93 @@ private:
             float_samples[i] = audio_data[i] / 32768.0f;
         }
 
-        // Check for speech if VAD is enabled
-        if (vad_) {
-            SherpaOnnxVoiceActivityDetectorAcceptWaveform(vad_, float_samples.data(), static_cast<int32_t>(float_samples.size()));
-            if (SherpaOnnxVoiceActivityDetectorDetected(vad_)) {
-                // Process audio for recognition
-                SherpaOnnxAcceptWaveformOffline(recognition_stream_, 44100, float_samples.data(), static_cast<int32_t>(float_samples.size()));
-                SherpaOnnxDecodeOfflineStream(recognizer_, recognition_stream_);
-                const auto* result = SherpaOnnxGetOfflineStreamResult(recognition_stream_);
-                if (result && result->text) {
-                    std::cout << "Recognized: " << result->text << std::endl;
+        // If we have remaining samples from last batch, prepend them
+        if (!remaining_samples_.empty()) {
+            float_samples.insert(float_samples.begin(),
+                               remaining_samples_.begin(),
+                               remaining_samples_.end());
+            remaining_samples_.clear();
+        }
+
+        // Process audio in windows of size specified in config
+        const int window_size = model_config_.vad.window_size;
+        size_t i = 0;
+        
+        while (i + window_size <= float_samples.size()) {
+            // Feed window_size samples to VAD
+            SherpaOnnxVoiceActivityDetectorAcceptWaveform(
+                vad_,
+                float_samples.data() + i,
+                window_size
+            );
+
+            // Process any complete speech segments
+            while (!SherpaOnnxVoiceActivityDetectorEmpty(vad_)) {
+                const SherpaOnnxSpeechSegment* segment = 
+                    SherpaOnnxVoiceActivityDetectorFront(vad_);
+
+                if (segment) {
+                    // Create a new stream for this segment
+                    const SherpaOnnxOfflineStream* stream = 
+                        SherpaOnnxCreateOfflineStream(recognizer_);
+
+                    if (stream) {
+                        // Process the speech segment
+                        SherpaOnnxAcceptWaveformOffline(
+                            stream,
+                            model_config_.vad.sample_rate,
+                            segment->samples,
+                            segment->n
+                        );
+
+                        SherpaOnnxDecodeOfflineStream(recognizer_, stream);
+
+                        const SherpaOnnxOfflineRecognizerResult* result = 
+                            SherpaOnnxGetOfflineStreamResult(stream);
+
+                        if (result && result->text) {
+                            float start = segment->start / static_cast<float>(model_config_.vad.sample_rate);
+                            float duration = segment->n / static_cast<float>(model_config_.vad.sample_rate);
+                            float end = start + duration;
+
+                            // 输出识别结果，包括时间戳和文本
+                            // std::cout << "\n[Recognition Result]" << std::endl;
+                            std::cout << "Time: " << std::fixed << std::setprecision(3)
+                                      << start << "s -- " << end << "s" << std::endl;
+                            std::cout << "Text: " << result->text << std::endl;
+                            
+                            // 如果有语言标识，也输出
+                            if (result->lang) {
+                                std::cout << "Language: " << result->lang << std::endl;
+                            }
+                            
+                            // 如果有 tokens，也输出
+                            // if (result->tokens) {
+                            //     std::cout << "Tokens: " << result->tokens << std::endl;
+                            // }
+                            std::cout << std::string(50, '-') << std::endl;
+                        }
+
+                        // Clean up
+                        SherpaOnnxDestroyOfflineRecognizerResult(result);
+                        SherpaOnnxDestroyOfflineStream(stream);
+                    }
+
+                    SherpaOnnxDestroySpeechSegment(segment);
                 }
+
+                SherpaOnnxVoiceActivityDetectorPop(vad_);
             }
+
+            i += window_size;
+        }
+
+        // Store remaining samples for next batch
+        if (i < float_samples.size()) {
+            remaining_samples_.assign(
+                float_samples.begin() + i,
+                float_samples.end()
+            );
         }
     }
 
@@ -181,7 +258,7 @@ private:
     }
     
     static void stream_read_cb(pa_stream *s, size_t length, void *userdata) {
-        std::cout << "stream_read_cb called with length: " << length << std::endl;
+        // std::cout << "stream_read_cb called with length: " << length << std::endl;
         auto *ac = static_cast<AudioCapture*>(userdata);
         const void *data;
         size_t bytes;
@@ -191,7 +268,7 @@ private:
             return;
         }
         
-        std::cout << "stream_peek returned bytes: " << bytes << ", data ptr: " << data << std::endl;
+        // std::cout << "stream_peek returned bytes: " << bytes << ", data ptr: " << data << std::endl;
         
         if (!data) {
             if (bytes > 0) {
@@ -202,16 +279,16 @@ private:
         }
         
         if (bytes > 0 && ac->is_recording) {
-            std::cout << "Processing " << bytes << " bytes of audio data" << std::endl;
+            // std::cout << "Processing " << bytes << " bytes of audio data" << std::endl;
             // Convert audio data to the required format (16kHz, mono, S16LE)
             const int16_t *samples = static_cast<const int16_t*>(data);
             size_t num_samples = bytes / sizeof(int16_t);
             
-            std::cout << "Number of samples: " << num_samples << std::endl;
+            // std::cout << "Number of samples: " << num_samples << std::endl;
             
             // If stereo, convert to mono by averaging channels
             if (ac->source_spec.channels == 2) {
-                std::cout << "Converting stereo to mono" << std::endl;
+                // std::cout << "Converting stereo to mono" << std::endl;
                 for (size_t i = 0; i < num_samples; i += 2) {
                     int32_t mono_sample = (static_cast<int32_t>(samples[i]) + 
                                          static_cast<int32_t>(samples[i + 1])) / 2;
@@ -247,7 +324,7 @@ private:
                 ac->audio_buffer = std::move(resampled);
             }
             
-            std::cout << "Final buffer size: " << ac->audio_buffer.size() << " samples" << std::endl;
+            // std::cout << "Final buffer size: " << ac->audio_buffer.size() << " samples" << std::endl;
             
             // Handle output based on mode
             if (ac->output_mode_ == OutputMode::FILE || ac->output_mode_ == OutputMode::BOTH) {
@@ -265,7 +342,7 @@ private:
             
             if (ac->output_mode_ == OutputMode::MODEL || ac->output_mode_ == OutputMode::BOTH) {
                 if (ac->recognition_enabled_) {
-                    std::cout << "Processing audio for recognition" << std::endl;
+                    // std::cout << "Processing audio for recognition" << std::endl;
                     ac->process_audio_for_recognition(ac->audio_buffer);
                 }
             }
@@ -518,7 +595,7 @@ public:
         // Set up source format
         source_spec.format = PA_SAMPLE_S16LE;
         source_spec.channels = 2;  // Default to stereo
-        source_spec.rate = 44100;  // Default to 44.1kHz
+        source_spec.rate = 16000;  // Changed to 16kHz
         
         std::cout << "Source format: " << source_spec.rate << "Hz, " 
                   << source_spec.channels << " channels" << std::endl;
