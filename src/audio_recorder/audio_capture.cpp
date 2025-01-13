@@ -14,6 +14,40 @@
 #include "sherpa-onnx/c-api/c-api.h"
 #include <mutex>
 
+// WAV header structure
+struct WavHeader {
+    // RIFF chunk
+    char riff_header[4] = {'R', 'I', 'F', 'F'};
+    uint32_t wav_size = 0;        // Will be filled later
+    char wave_header[4] = {'W', 'A', 'V', 'E'};
+    
+    // Format chunk
+    char fmt_header[4] = {'f', 'm', 't', ' '};
+    uint32_t fmt_chunk_size = 16;
+    uint16_t audio_format = 1;    // PCM = 1
+    uint16_t num_channels = 2;    // Stereo = 2
+    uint32_t sample_rate = 44100;
+    uint32_t byte_rate = 0;       // Will be calculated
+    uint16_t sample_alignment = 0; // Will be calculated
+    uint16_t bit_depth = 16;      // 16 bits per sample
+    
+    // Data chunk
+    char data_header[4] = {'d', 'a', 't', 'a'};
+    uint32_t data_bytes = 0;      // Will be filled later
+    
+    WavHeader(uint16_t channels = 2, uint32_t rate = 44100) {
+        num_channels = channels;
+        sample_rate = rate;
+        sample_alignment = num_channels * (bit_depth / 8);
+        byte_rate = sample_rate * sample_alignment;
+    }
+    
+    void update_sizes(uint32_t data_size) {
+        data_bytes = data_size;
+        wav_size = data_size + sizeof(WavHeader) - 8;  // -8 because RIFF header size is not included
+    }
+};
+
 // Define output modes
 enum class OutputMode {
     FILE,
@@ -32,6 +66,9 @@ private:
     voice::ModelConfig model_config_;
     OutputMode output_mode_;
     std::ofstream output_file_;
+    std::streampos wav_header_pos_;  // Position of WAV header for updating sizes
+    uint32_t total_bytes_written_;   // Track total bytes written for WAV header
+    bool is_wav_format_;             // Whether we're writing WAV format
     
     // Speech recognition members
     const SherpaOnnxOfflineRecognizer* recognizer_;
@@ -216,8 +253,12 @@ private:
             if (ac->output_mode_ == OutputMode::FILE || ac->output_mode_ == OutputMode::BOTH) {
                 if (ac->output_file_.is_open()) {
                     std::cout << "Writing to file" << std::endl;
+                    size_t bytes_to_write = ac->audio_buffer.size() * sizeof(int16_t);
                     ac->output_file_.write(reinterpret_cast<const char*>(ac->audio_buffer.data()), 
-                                         ac->audio_buffer.size() * sizeof(int16_t));
+                                         bytes_to_write);
+                    if (ac->is_wav_format_) {
+                        ac->total_bytes_written_ += bytes_to_write;
+                    }
                     ac->output_file_.flush();  // Make sure data is written to disk
                 }
             }
@@ -250,6 +291,16 @@ private:
             const char* media_title = pa_proplist_gets(i->proplist, "media.title");
             const char* media_role = pa_proplist_gets(i->proplist, "media.role");
             const char* stream_name = i->name;
+
+                        // Debug output
+            std::cout << "Properties for sink input " << i->index << ":\n";
+            std::cout << "  media.name: " << (media_name ? media_name : "null") << "\n";
+            std::cout << "  application.name: " << (application_name ? application_name : "null") << "\n";
+            std::cout << "  application.process.name: " << (application_process_name ? application_process_name : "null") << "\n";
+            std::cout << "  window.title: " << (window_title ? window_title : "null") << "\n";
+            std::cout << "  media.title: " << (media_title ? media_title : "null") << "\n";
+            std::cout << "  media.role: " << (media_role ? media_role : "null") << "\n";
+            std::cout << "  stream_name: " << (stream_name ? stream_name : "null") << "\n";
             
             // Build descriptive name with available information
             if (window_title && media_title) {
@@ -281,11 +332,46 @@ private:
         pa_threaded_mainloop_signal(static_cast<AudioCapture*>(userdata)->mainloop_, 0);
     }
 
+    void write_wav_header() {
+        if (!output_file_.is_open()) return;
+        
+        WavHeader header(source_spec.channels, source_spec.rate);
+        wav_header_pos_ = output_file_.tellp();
+        output_file_.write(reinterpret_cast<const char*>(&header), sizeof(WavHeader));
+        total_bytes_written_ = 0;
+    }
+    
+    void update_wav_header() {
+        if (!output_file_.is_open() || !is_wav_format_) return;
+        
+        // Save current position
+        auto current_pos = output_file_.tellp();
+        
+        // Create header with final sizes
+        WavHeader header(source_spec.channels, source_spec.rate);
+        header.update_sizes(total_bytes_written_);
+        
+        // Go back to header position and write updated header
+        output_file_.seekp(wav_header_pos_);
+        output_file_.write(reinterpret_cast<const char*>(&header), sizeof(WavHeader));
+        
+        // Restore position
+        output_file_.seekp(current_pos);
+    }
+
+    // Helper function to check file extension
+    static bool has_extension(const std::string& filename, const std::string& ext) {
+        if (filename.length() < ext.length()) {
+            return false;
+        }
+        return filename.compare(filename.length() - ext.length(), ext.length(), ext) == 0;
+    }
+
 public:
     AudioCapture(const std::string& config_path = "", OutputMode mode = OutputMode::FILE) 
         : mainloop_(nullptr), context_(nullptr), stream_(nullptr), is_recording(false),
           recognizer_(nullptr), recognition_stream_(nullptr), vad_(nullptr),
-          recognition_enabled_(false), output_mode_(mode) {
+          recognition_enabled_(false), output_mode_(mode), total_bytes_written_(0), is_wav_format_(false) {
         
         // Load model configuration if provided and needed
         if ((mode == OutputMode::MODEL || mode == OutputMode::BOTH) && !config_path.empty()) {
@@ -416,9 +502,13 @@ public:
         // Open output file if in FILE or BOTH mode
         if ((output_mode_ == OutputMode::FILE || output_mode_ == OutputMode::BOTH) && !output_path.empty()) {
             std::cout << "Opening output file: " << output_path << std::endl;
+            is_wav_format_ = has_extension(output_path, ".wav");
             output_file_.open(output_path, std::ios::binary);
             if (!output_file_.is_open()) {
                 throw std::runtime_error("Failed to open output file: " + output_path);
+            }
+            if (is_wav_format_) {
+                write_wav_header();
             }
         }
 
@@ -464,6 +554,7 @@ public:
             AudioCapture* ac;
             bool* found;
             std::string* sink_name;
+            pa_stream* stream;
         };
         
         auto get_sink_cb = [](pa_context *c, const pa_sink_input_info *i, int eol, void *userdata) {
@@ -474,16 +565,21 @@ public:
                 *data->found = true;
                 *data->sink_name = i->sink;
                 std::cout << "Found sink: " << i->sink << std::endl;
+            } else if (eol < 0) {
+                // Error occurred
+                std::cerr << "Error getting sink info" << std::endl;
             }
             
             pa_threaded_mainloop_signal(data->ac->mainloop_, 0);
         };
         
-        CallbackData cb_data{this, &found, &sink_name};
+        CallbackData cb_data{this, &found, &sink_name, stream_};
         
         pa_operation *op = pa_context_get_sink_input_info(context_, sink_input_index, get_sink_cb, &cb_data);
         if (!op) {
+            pa_stream_disconnect(stream_);
             pa_stream_unref(stream_);
+            stream_ = nullptr;
             pa_threaded_mainloop_unlock(mainloop_);
             throw std::runtime_error("Failed to get sink input info");
         }
@@ -496,7 +592,9 @@ public:
         pa_operation_unref(op);
         
         if (!found) {
+            pa_stream_disconnect(stream_);
             pa_stream_unref(stream_);
+            stream_ = nullptr;
             pa_threaded_mainloop_unlock(mainloop_);
             throw std::runtime_error("Failed to find sink for application");
         }
@@ -509,7 +607,9 @@ public:
         
         if (pa_stream_connect_record(stream_, monitor_source.c_str(), &buffer_attr,
             static_cast<pa_stream_flags_t>(PA_STREAM_ADJUST_LATENCY | PA_STREAM_AUTO_TIMING_UPDATE)) < 0) {
+            pa_stream_disconnect(stream_);
             pa_stream_unref(stream_);
+            stream_ = nullptr;
             pa_threaded_mainloop_unlock(mainloop_);
             throw std::runtime_error("Failed to connect stream");
         }
@@ -534,6 +634,9 @@ public:
             pa_threaded_mainloop_unlock(mainloop_);
         }
         if (output_file_.is_open()) {
+            if (is_wav_format_) {
+                update_wav_header();
+            }
             output_file_.close();
         }
     }
