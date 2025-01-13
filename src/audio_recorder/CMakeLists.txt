@@ -8,7 +8,11 @@ set(COMMON_SOURCES
 # 添加头文件目录
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/..    # 添加 src 目录到包含路径
 )
+
+# 查找 yaml-cpp 库
+find_package(yaml-cpp REQUIRED)
 
 # 根据平台选择实现
 if(WIN32)
@@ -38,15 +42,32 @@ endif()
 add_library(audio_recorder STATIC
     ${COMMON_SOURCES}
     ${PLATFORM_SOURCES}
+    audio_capture.cpp    # 添加 IAudioCapture 的实现
 )
 
 # 链接依赖库
 target_link_libraries(audio_recorder
     ${PLATFORM_LIBS}
+    voice_service_core
+)
+
+# 创建可执行文件
+add_executable(audio_recorder_app
+    main.cpp
+)
+
+# 链接audio_recorder库和yaml-cpp
+target_link_libraries(audio_recorder_app
+    audio_recorder
+    yaml-cpp
+    voice_service_core
+    ${PULSEAUDIO_LIBRARIES}
+    pulse
+    pulse-simple
 )
 
 # 安装规则
-install(TARGETS audio_recorder
+install(TARGETS audio_recorder audio_recorder_app
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib
     RUNTIME DESTINATION bin
