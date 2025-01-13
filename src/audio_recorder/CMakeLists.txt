@@ -20,6 +20,7 @@ target_include_directories(audio_recorder
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${PULSEAUDIO_INCLUDE_DIRS}
+    ${SHERPA_ONNX_INCLUDE_DIR}
 )
 
 # Link libraries
@@ -28,6 +29,8 @@ target_link_libraries(audio_recorder
     voice_service_core
     ${PULSEAUDIO_LIBRARIES}
     pthread
+    sherpa-onnx-c-api
+    sherpa-onnx-cxx-api
 )
 
 # Install targets
