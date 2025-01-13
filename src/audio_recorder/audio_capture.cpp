@@ -146,16 +146,25 @@ private:
     static void stream_read_cb(pa_stream *s, size_t length, void *userdata) {
         auto *ac = static_cast<AudioCapture*>(userdata);
         const void *data;
+        size_t bytes;
         
-        if (pa_stream_peek(s, &data, &length) < 0) {
+        if (pa_stream_peek(s, &data, &bytes) < 0) {
             std::cerr << "Failed to read from stream" << std::endl;
             return;
         }
         
-        if (data && length > 0 && ac->is_recording) {
+        if (!data) {
+            if (bytes > 0) {
+                std::cerr << "Got audio hole of " << bytes << " bytes" << std::endl;
+            }
+            pa_stream_drop(s);
+            return;
+        }
+        
+        if (bytes > 0 && ac->is_recording) {
             // Convert audio data to the required format (16kHz, mono, S16LE)
             const int16_t *samples = static_cast<const int16_t*>(data);
-            size_t num_samples = length / sizeof(int16_t);
+            size_t num_samples = bytes / sizeof(int16_t);
             
             // If stereo, convert to mono by averaging channels
             if (ac->source_spec.channels == 2) {
@@ -197,6 +206,7 @@ private:
                 if (ac->output_file_.is_open()) {
                     ac->output_file_.write(reinterpret_cast<const char*>(ac->audio_buffer.data()), 
                                          ac->audio_buffer.size() * sizeof(int16_t));
+                    ac->output_file_.flush();  // Make sure data is written to disk
                 }
             }
             
@@ -206,7 +216,7 @@ private:
                 }
             }
             
-            std::cout << "Processed " << ac->audio_buffer.size() << " samples" << std::endl;
+            ac->audio_buffer.clear();  // Clear buffer after processing
         }
         
         pa_stream_drop(s);
@@ -227,16 +237,6 @@ private:
             const char* media_title = pa_proplist_gets(i->proplist, "media.title");
             const char* media_role = pa_proplist_gets(i->proplist, "media.role");
             const char* stream_name = i->name;
-            
-            // Debug output
-            std::cout << "Properties for sink input " << i->index << ":\n";
-            std::cout << "  media.name: " << (media_name ? media_name : "null") << "\n";
-            std::cout << "  application.name: " << (application_name ? application_name : "null") << "\n";
-            std::cout << "  application.process.name: " << (application_process_name ? application_process_name : "null") << "\n";
-            std::cout << "  window.title: " << (window_title ? window_title : "null") << "\n";
-            std::cout << "  media.title: " << (media_title ? media_title : "null") << "\n";
-            std::cout << "  media.role: " << (media_role ? media_role : "null") << "\n";
-            std::cout << "  stream_name: " << (stream_name ? stream_name : "null") << "\n";
             
             // Build descriptive name with available information
             if (window_title && media_title) {
@@ -260,8 +260,12 @@ private:
             
             ac->available_applications[i->index] = app_name;
         }
-        auto *mainloop = static_cast<AudioCapture*>(userdata)->mainloop_;
-        pa_threaded_mainloop_signal(mainloop, 0);
+        
+        if (eol < 0) {
+            std::cerr << "Error getting sink input info" << std::endl;
+        }
+        
+        pa_threaded_mainloop_signal(static_cast<AudioCapture*>(userdata)->mainloop_, 0);
     }
 
 public:
@@ -402,40 +406,35 @@ public:
             }
         }
 
-        // Set up source format (we'll get this from the sink input)
+        pa_threaded_mainloop_lock(mainloop_);
+
+        // Set up source format
         source_spec.format = PA_SAMPLE_S16LE;
         source_spec.channels = 2;  // Default to stereo
-        source_spec.rate = 44100;  // Default to 44.1kHz
+        source_spec.rate = 16000;  // Default to 44.1kHz
         
-        // Set up target format for speech recognition
-        target_spec.format = PA_SAMPLE_S16LE;
-        target_spec.channels = CHANNELS;
-        target_spec.rate = SAMPLE_RATE;
-        
-        // Create stream with source format (we'll convert later)
+        // Create stream
         stream_ = pa_stream_new(context_, "RecordStream", &source_spec, nullptr);
         if (!stream_) {
+            pa_threaded_mainloop_unlock(mainloop_);
             throw std::runtime_error("Failed to create stream");
         }
         
         pa_stream_set_state_callback(stream_, stream_state_cb, mainloop_);
         pa_stream_set_read_callback(stream_, stream_read_cb, this);
         
-        // Set up buffer attributes
+        // Set up buffer attributes (following OBS's approach)
         pa_buffer_attr buffer_attr;
         buffer_attr.maxlength = (uint32_t)-1;
-        buffer_attr.fragsize = 4096;  // Read in small chunks
+        buffer_attr.fragsize = pa_usec_to_bytes(25000, &source_spec);  // 25ms chunks
+        buffer_attr.minreq = (uint32_t)-1;
+        buffer_attr.prebuf = (uint32_t)-1;
+        buffer_attr.tlength = (uint32_t)-1;
         
         // Get the sink name for this application
-        pa_threaded_mainloop_lock(mainloop_);
-        
         bool found = false;
         std::string sink_name;
         
-        // Create a persistent pair for the callback data
-        auto sink_data = std::make_pair(&found, &sink_name);
-        
-        // Get sink input info to find its sink
         auto get_sink_cb = [](pa_context *c, const pa_sink_input_info *i, int eol, void *userdata) {
             if (!eol && i) {
                 auto *data = static_cast<std::pair<bool*, std::string*>*>(userdata);
@@ -448,8 +447,15 @@ public:
             pa_threaded_mainloop_signal(mainloop, 0);
         };
         
+        auto sink_data = std::make_pair(&found, &sink_name);
         std::pair<AudioCapture*, std::pair<bool*, std::string*>*> cb_data = {this, &sink_data};
+        
         pa_operation *op = pa_context_get_sink_input_info(context_, sink_input_index, get_sink_cb, &cb_data);
+        if (!op) {
+            pa_stream_unref(stream_);
+            pa_threaded_mainloop_unlock(mainloop_);
+            throw std::runtime_error("Failed to get sink input info");
+        }
         
         while (pa_operation_get_state(op) == PA_OPERATION_RUNNING) {
             pa_threaded_mainloop_wait(mainloop_);
@@ -457,6 +463,7 @@ public:
         pa_operation_unref(op);
         
         if (!found) {
+            pa_stream_unref(stream_);
             pa_threaded_mainloop_unlock(mainloop_);
             throw std::runtime_error("Failed to find sink for application");
         }
@@ -466,9 +473,8 @@ public:
         
         if (pa_stream_connect_record(stream_, monitor_source.c_str(), &buffer_attr,
             static_cast<pa_stream_flags_t>(PA_STREAM_ADJUST_LATENCY | PA_STREAM_AUTO_TIMING_UPDATE)) < 0) {
-            pa_threaded_mainloop_unlock(mainloop_);
             pa_stream_unref(stream_);
-            stream_ = nullptr;
+            pa_threaded_mainloop_unlock(mainloop_);
             throw std::runtime_error("Failed to connect stream");
         }
         
@@ -476,15 +482,17 @@ public:
         is_recording = true;
         
         // Clear any existing audio data
-        clear_audio_data();
+        audio_buffer.clear();
     }
     
     void stop_recording() {
         is_recording = false;
         if (stream_) {
+            pa_threaded_mainloop_lock(mainloop_);
             pa_stream_disconnect(stream_);
             pa_stream_unref(stream_);
             stream_ = nullptr;
+            pa_threaded_mainloop_unlock(mainloop_);
         }
         if (output_file_.is_open()) {
             output_file_.close();
@@ -493,20 +501,5 @@ public:
     
     const std::map<uint32_t, std::string>& get_available_applications() const {
         return available_applications;
-    }
-    
-    // Get the recorded audio data
-    std::vector<int16_t> get_audio_data() {
-        return audio_buffer;
-    }
-    
-    // Clear the audio buffer
-    void clear_audio_data() {
-        audio_buffer.clear();
-    }
-    
-    // Get the model configuration
-    const voice::ModelConfig& get_model_config() const {
-        return model_config_;
     }
 }; 
