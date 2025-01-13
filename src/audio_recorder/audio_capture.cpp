@@ -55,7 +55,7 @@ private:
     // Initialize speech recognition
     bool initialize_recognition() {
         if (!model_config_.vad.model_path.empty()) {
-            // Initialize VAD
+            // Initialize VAD using model_config_
             SherpaOnnxVadModelConfig vad_config = {};
             vad_config.silero_vad.model = model_config_.vad.model_path.c_str();
             vad_config.silero_vad.threshold = model_config_.vad.threshold;
@@ -63,7 +63,7 @@ private:
             vad_config.silero_vad.min_speech_duration = model_config_.vad.min_speech_duration;
             vad_config.silero_vad.max_speech_duration = model_config_.vad.max_speech_duration;
             vad_config.silero_vad.window_size = model_config_.vad.window_size;
-            vad_config.sample_rate = SAMPLE_RATE;
+            vad_config.sample_rate = model_config_.vad.sample_rate;
             vad_config.num_threads = model_config_.vad.num_threads;
             vad_config.debug = model_config_.vad.debug ? 1 : 0;
 
@@ -74,7 +74,7 @@ private:
             }
         }
 
-        // Initialize recognizer
+        // Initialize recognizer using ModelFactory
         try {
             recognizer_ = voice::ModelFactory::CreateModel(model_config_);
             if (!recognizer_) {
@@ -269,6 +269,7 @@ public:
         : mainloop_(nullptr), context_(nullptr), stream_(nullptr), is_recording(false),
           recognizer_(nullptr), recognition_stream_(nullptr), vad_(nullptr),
           recognition_enabled_(false), output_mode_(mode) {
+        
         // Load model configuration if provided and needed
         if ((mode == OutputMode::MODEL || mode == OutputMode::BOTH) && !config_path.empty()) {
             model_config_ = voice::ModelConfig::LoadFromFile(config_path);
