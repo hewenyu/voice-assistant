@@ -9,18 +9,28 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <netdb.h>
-
+#include <iostream>
 namespace voice {
 
 DeepLXTranslator::DeepLXTranslator(const Config& config) 
     : config_(config) {
     // Parse URL to get host, port and path
+    // 例如 http://localhost:1188/translate
+    // TODO: 解析 URL 获取 host, port 和 path
+    std::cout << "URL: " << config_.url << std::endl;
     std::regex url_regex("http://([^/:]+):?(\\d*)(/.*)?");
     std::smatch matches;
+    if (!std::regex_match(config_.url, matches, url_regex)) {
+        throw std::runtime_error("Invalid URL format"); 
+    }
+    std::cout << "Matches: " << matches.size() << std::endl;
     if (std::regex_match(config.url, matches, url_regex)) {
         host_ = matches[1].str();
+        std::cout << "Host: " << host_ << std::endl;
         port_ = matches[2].length() > 0 ? std::stoi(matches[2].str()) : 80;
+        std::cout << "Port: " << port_ << std::endl;    
         path_ = matches[3].length() > 0 ? matches[3].str() : "/";
+        std::cout << "Path: " << path_ << std::endl;
     } else {
         throw std::runtime_error("Invalid URL format");
     }

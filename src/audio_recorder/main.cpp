@@ -51,6 +51,7 @@ void print_usage() {
               << "    target_lang: ZH\n";
 }
 
+
 // Function to test translation
 void test_translation(const voice::ModelConfig& config) {
     if (!config.deeplx.enabled) {

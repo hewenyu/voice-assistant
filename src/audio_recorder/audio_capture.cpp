@@ -92,10 +92,31 @@ private:
     pa_sample_spec source_spec;
     pa_sample_spec target_spec;
     
-    voice::DeepLXTranslator translator_;
+    std::unique_ptr<voice::DeepLXTranslator> translator_;
     
     std::string translate(const std::string& text, const std::string& source_lang) {
-        return translator_.translate(text, source_lang);
+        if (!model_config_.deeplx.enabled) {
+            return text;
+        }
+
+        try {
+            // Lazy initialization of translator
+            if (!translator_) {
+                std::string url = model_config_.deeplx.url;
+                if (url.find("http://") != 0 && url.find("https://") != 0) {
+                    url = "http://" + url;
+                }
+                translator_ = std::make_unique<voice::DeepLXTranslator>(voice::DeepLXTranslator::Config{
+                    url,
+                    model_config_.deeplx.token,
+                    model_config_.deeplx.target_lang
+                });
+            }
+            return translator_->translate(text, source_lang);
+        } catch (const std::exception& e) {
+            std::cerr << "Translation error: " << e.what() << std::endl;
+            return text;  // Return original text on error
+        }
     }
     
     // Initialize speech recognition
@@ -471,8 +492,7 @@ public:
     AudioCapture(const std::string& config_path = "", OutputMode mode = OutputMode::FILE) 
         : mainloop_(nullptr), context_(nullptr), stream_(nullptr), is_recording(false),
           recognizer_(nullptr), recognition_stream_(nullptr), vad_(nullptr),
-          recognition_enabled_(false), output_mode_(mode), total_bytes_written_(0), is_wav_format_(false),
-          translator_({std::string(), std::string(), std::string()}) {
+          recognition_enabled_(false), output_mode_(mode), total_bytes_written_(0), is_wav_format_(false) {
         
         // Load model configuration if provided and needed
         if ((mode == OutputMode::MODEL || mode == OutputMode::BOTH) && !config_path.empty()) {
@@ -483,15 +503,6 @@ public:
             }
             if (!initialize_recognition()) {
                 throw std::runtime_error("Failed to initialize speech recognition");
-            }
-
-            // Initialize translator if translation is enabled
-            if (model_config_.deeplx.enabled) {
-                translator_ = voice::DeepLXTranslator({
-                    model_config_.deeplx.url,
-                    model_config_.deeplx.token,
-                    model_config_.deeplx.target_lang
-                });
             }
         }
         
