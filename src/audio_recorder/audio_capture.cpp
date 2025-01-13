@@ -208,11 +208,17 @@ private:
                             if (result->lang) {
                                 // std::cout << "Language: " << result->lang << std::endl;
                                 // Language: <|zh|>
-                                // 提取语言代码
+                                // 提取语言代码 例如 <|zh|> 提取 zh,并转换为大写
                                 std::string language_code = std::string(result->lang).substr(2, 2);
+                                std::transform(language_code.begin(), language_code.end(), language_code.begin(), ::toupper);
                                 std::cout << "Language Code: " << language_code << std::endl;
 
-                                // TODO: 翻译
+                                // 输出 model_config_.deeplx.target_lang,也要大写
+                                std::string target_lang = model_config_.deeplx.target_lang;
+                                std::transform(target_lang.begin(), target_lang.end(), target_lang.begin(), ::toupper);
+                                std::cout << "Target Language: " << target_lang << std::endl;
+                                // TODO: 翻译 target_lang 和 language_code 不一致时 ，都大写
+                               
                             }
                             
                             // 如果有 tokens，也输出
