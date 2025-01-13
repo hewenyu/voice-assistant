@@ -8,17 +8,30 @@
 #include <memory>
 #include <chrono>
 #include <map>
+#include <fstream>
+#include <core/model_config.h>
 
 class AudioCapture {
 private:
     pa_threaded_mainloop *mainloop;
     pa_context *context;
     pa_stream *stream;
-    pa_sample_spec ss;
     std::string app_name;
     bool is_recording;
+    std::vector<int16_t> audio_buffer;  // Buffer for audio data
+    voice::ModelConfig model_config_;
+    
     std::map<std::string, std::string> available_sources;
     std::map<uint32_t, std::string> available_applications;
+
+    // Audio format settings for speech recognition
+    static constexpr int SAMPLE_RATE = 16000;  // Required by VAD
+    static constexpr int CHANNELS = 1;         // Mono for speech recognition
+    static constexpr int BITS_PER_SAMPLE = 16; // S16LE format
+    
+    // Resampling state
+    pa_sample_spec source_spec;
+    pa_sample_spec target_spec;
     
     static void context_state_cb(pa_context *c, void *userdata) {
         auto *ac = static_cast<AudioCapture*>(userdata);
@@ -48,8 +61,46 @@ private:
         }
         
         if (data && length > 0 && ac->is_recording) {
-            // Write data to file or process it
-            std::cout << "Read " << length << " bytes of audio data" << std::endl;
+            // Convert audio data to the required format (16kHz, mono, S16LE)
+            const int16_t *samples = static_cast<const int16_t*>(data);
+            size_t num_samples = length / sizeof(int16_t);
+            
+            // If stereo, convert to mono by averaging channels
+            if (ac->source_spec.channels == 2) {
+                for (size_t i = 0; i < num_samples; i += 2) {
+                    int32_t mono_sample = (static_cast<int32_t>(samples[i]) + 
+                                         static_cast<int32_t>(samples[i + 1])) / 2;
+                    ac->audio_buffer.push_back(static_cast<int16_t>(mono_sample));
+                }
+            } else {
+                ac->audio_buffer.insert(ac->audio_buffer.end(), samples, samples + num_samples);
+            }
+            
+            // Resample if needed (simple linear resampling)
+            if (ac->source_spec.rate != SAMPLE_RATE) {
+                std::vector<int16_t> resampled;
+                float ratio = static_cast<float>(SAMPLE_RATE) / ac->source_spec.rate;
+                size_t new_size = static_cast<size_t>(ac->audio_buffer.size() * ratio);
+                resampled.reserve(new_size);
+                
+                for (size_t i = 0; i < new_size; ++i) {
+                    float src_idx = i / ratio;
+                    size_t idx1 = static_cast<size_t>(src_idx);
+                    size_t idx2 = idx1 + 1;
+                    if (idx2 >= ac->audio_buffer.size()) idx2 = idx1;
+                    
+                    float frac = src_idx - idx1;
+                    int16_t sample = static_cast<int16_t>(
+                        ac->audio_buffer[idx1] * (1.0f - frac) + 
+                        ac->audio_buffer[idx2] * frac
+                    );
+                    resampled.push_back(sample);
+                }
+                
+                ac->audio_buffer = std::move(resampled);
+            }
+            
+            std::cout << "Processed " << ac->audio_buffer.size() << " samples" << std::endl;
         }
         
         pa_stream_drop(s);
@@ -108,7 +159,18 @@ private:
     }
 
 public:
-    AudioCapture() : mainloop(nullptr), context(nullptr), stream(nullptr), is_recording(false) {
+    AudioCapture(const std::string& config_path = "") 
+        : mainloop(nullptr), context(nullptr), stream(nullptr), is_recording(false) {
+        // Load model configuration if provided
+        if (!config_path.empty()) {
+            model_config_ = voice::ModelConfig::LoadFromFile(config_path);
+            std::string error = model_config_.Validate();
+            if (!error.empty()) {
+                throw std::runtime_error("Invalid model configuration: " + error);
+            }
+        }
+        
+        // Initialize PulseAudio
         mainloop = pa_threaded_mainloop_new();
         if (!mainloop) {
             throw std::runtime_error("Failed to create mainloop");
@@ -210,12 +272,18 @@ public:
             throw std::runtime_error("Already recording");
         }
         
-        pa_sample_spec spec;
-        spec.format = PA_SAMPLE_S16LE;
-        spec.channels = 2;
-        spec.rate = 44100;
+        // Set up source format (we'll get this from the sink input)
+        source_spec.format = PA_SAMPLE_S16LE;
+        source_spec.channels = 2;  // Default to stereo
+        source_spec.rate = 44100;  // Default to 44.1kHz
         
-        stream = pa_stream_new(context, "RecordStream", &spec, nullptr);
+        // Set up target format for speech recognition
+        target_spec.format = PA_SAMPLE_S16LE;
+        target_spec.channels = CHANNELS;
+        target_spec.rate = SAMPLE_RATE;
+        
+        // Create stream with source format (we'll convert later)
+        stream = pa_stream_new(context, "RecordStream", &source_spec, nullptr);
         if (!stream) {
             throw std::runtime_error("Failed to create stream");
         }
@@ -223,18 +291,62 @@ public:
         pa_stream_set_state_callback(stream, stream_state_cb, mainloop);
         pa_stream_set_read_callback(stream, stream_read_cb, this);
         
+        // Set up buffer attributes
         pa_buffer_attr buffer_attr;
         buffer_attr.maxlength = (uint32_t)-1;
-        buffer_attr.fragsize = 4096;
+        buffer_attr.fragsize = 4096;  // Read in small chunks
         
-        if (pa_stream_connect_record(stream, nullptr, &buffer_attr, 
+        // Get the sink name for this application
+        pa_threaded_mainloop_lock(mainloop);
+        
+        bool found = false;
+        std::string sink_name;
+        
+        // Create a persistent pair for the callback data
+        auto sink_data = std::make_pair(&found, &sink_name);
+        
+        // Get sink input info to find its sink
+        auto get_sink_cb = [](pa_context *c, const pa_sink_input_info *i, int eol, void *userdata) {
+            if (!eol && i) {
+                auto *data = static_cast<std::pair<bool*, std::string*>*>(userdata);
+                *data->first = true;
+                *data->second = i->sink;
+            }
+            auto *mainloop = static_cast<AudioCapture*>(
+                static_cast<std::pair<AudioCapture*, std::pair<bool*, std::string*>*>*>(userdata)->first
+            )->mainloop;
+            pa_threaded_mainloop_signal(mainloop, 0);
+        };
+        
+        std::pair<AudioCapture*, std::pair<bool*, std::string*>*> cb_data = {this, &sink_data};
+        pa_operation *op = pa_context_get_sink_input_info(context, sink_input_index, get_sink_cb, &cb_data);
+        
+        while (pa_operation_get_state(op) == PA_OPERATION_RUNNING) {
+            pa_threaded_mainloop_wait(mainloop);
+        }
+        pa_operation_unref(op);
+        
+        if (!found) {
+            pa_threaded_mainloop_unlock(mainloop);
+            throw std::runtime_error("Failed to find sink for application");
+        }
+        
+        // Connect to the monitor source of the sink
+        std::string monitor_source = sink_name + ".monitor";
+        
+        if (pa_stream_connect_record(stream, monitor_source.c_str(), &buffer_attr,
             static_cast<pa_stream_flags_t>(PA_STREAM_ADJUST_LATENCY | PA_STREAM_AUTO_TIMING_UPDATE)) < 0) {
+            pa_threaded_mainloop_unlock(mainloop);
             pa_stream_unref(stream);
             stream = nullptr;
             throw std::runtime_error("Failed to connect stream");
         }
         
+        pa_threaded_mainloop_unlock(mainloop);
         is_recording = true;
+        
+        // Clear any existing audio data
+        clear_audio_data();
     }
     
     void stop_recording() {
@@ -248,5 +360,20 @@ public:
     
     const std::map<uint32_t, std::string>& get_available_applications() const {
         return available_applications;
+    }
+    
+    // Get the recorded audio data
+    std::vector<int16_t> get_audio_data() {
+        return audio_buffer;
+    }
+    
+    // Clear the audio buffer
+    void clear_audio_data() {
+        audio_buffer.clear();
+    }
+    
+    // Get the model configuration
+    const voice::ModelConfig& get_model_config() const {
+        return model_config_;
     }
 }; 
