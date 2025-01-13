@@ -42,3 +42,10 @@ vad:
   sample_rate: 16000  # Audio sample rate (Hz)
   num_threads: 1  # Number of threads for VAD processing
   debug: false  # Enable debug output for VAD
+
+# 翻译配置
+deeplx:
+  enabled: true
+  url: http://localhost:1188/translate
+  token: your_access_token
+  target_lang: ZH

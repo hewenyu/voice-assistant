@@ -43,6 +43,13 @@ struct VadConfig {
     bool debug = false;
 };
 
+struct DeepLXConfig {
+    std::string url;
+    std::string token;
+    std::string target_lang = "ZH";  // Default target language is Chinese
+    bool enabled = false;  // Whether translation is enabled
+};
+
 struct ModelConfig {
     std::string type;  // "sense_voice" or "whisper"
     std::string provider = "cpu";
@@ -53,6 +60,7 @@ struct ModelConfig {
     WhisperConfig whisper;
     SenseVoiceConfig sense_voice;
     VadConfig vad;
+    DeepLXConfig deeplx;  // Add DeepLX configuration
 
     // Load configuration from YAML file
     static ModelConfig LoadFromFile(const std::string& config_path) {
@@ -114,6 +122,17 @@ struct ModelConfig {
             model_config.vad.sample_rate = vad_config["sample_rate"].as<int>(16000);
             model_config.vad.num_threads = vad_config["num_threads"].as<int>(1);
             model_config.vad.debug = vad_config["debug"].as<bool>(false);
+
+            // Load DeepLX configuration if present
+            if (config["deeplx"]) {
+                auto deeplx_config = config["deeplx"];
+                model_config.deeplx.enabled = deeplx_config["enabled"].as<bool>(false);
+                if (model_config.deeplx.enabled) {
+                    model_config.deeplx.url = deeplx_config["url"].as<std::string>();
+                    model_config.deeplx.token = deeplx_config["token"].as<std::string>();
+                    model_config.deeplx.target_lang = deeplx_config["target_lang"].as<std::string>("ZH");
+                }
+            }
 
             return model_config;
         } catch (const YAML::Exception& e) {
@@ -180,6 +199,19 @@ struct ModelConfig {
             error += "Number of threads should be positive\n";
         }
 
+        // Validate DeepLX configuration if enabled
+        if (deeplx.enabled) {
+            if (deeplx.url.empty()) {
+                error += "DeepLX URL is empty\n";
+            }
+            if (deeplx.token.empty()) {
+                error += "DeepLX token is empty\n";
+            }
+            if (deeplx.target_lang.empty()) {
+                error += "DeepLX target language is empty\n";
+            }
+        }
+
         return error;
     }
 
@@ -212,6 +244,11 @@ struct ModelConfig {
             if (whisper.decoding_method.empty()) {
                 whisper.decoding_method = "greedy_search";
             }
+        }
+
+        // Set DeepLX defaults
+        if (deeplx.target_lang.empty()) {
+            deeplx.target_lang = "ZH";
         }
     }
 }; 

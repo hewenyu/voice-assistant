@@ -6,6 +6,7 @@
 #include <chrono>
 #include <core/model_config.h>
 #include "audio_capture.cpp"
+#include "common/deeplx_translator.h"
 
 static bool running = true;
 
@@ -20,12 +21,14 @@ void print_usage() {
               << "  -s, --source <index>      Record from the specified source index\n"
               << "  -f, --file <path>         Save audio to file (default: output.raw)\n"
               << "  -m, --model <path>        Use speech recognition model with YAML config at path\n"
+              << "  -t, --test-translation    Test translation configuration\n"
               << "  -h, --help                Show this help message\n"
               << "\nExamples:\n"
               << "  audio_recorder --list\n"
               << "  audio_recorder -s 1 -f recording.raw\n"
               << "  audio_recorder -s 1 -m config.yaml\n"
               << "  audio_recorder -s 1 -f recording.raw -m config.yaml\n"
+              << "  audio_recorder -m config.yaml -t\n"
               << "\nYAML Configuration Example:\n"
               << "  model:\n"
               << "    type: sense_voice  # or whisper\n"
@@ -41,9 +44,48 @@ void print_usage() {
               << "  vad:\n"
               << "    model_path: path/to/vad.onnx\n"
               << "    threshold: 0.3\n"
-              << "    min_silence_duration: 0.25\n"
-              << "    min_speech_duration: 0.1\n"
-              << "    max_speech_duration: 15.0\n";
+              << "  deeplx:\n"
+              << "    enabled: true\n"
+              << "    url: http://localhost:1188/translate\n"
+              << "    token: your_access_token\n"
+              << "    target_lang: ZH\n";
+}
+
+// Function to test translation
+void test_translation(const voice::ModelConfig& config) {
+    if (!config.deeplx.enabled) {
+        std::cout << "Translation is not enabled in config\n";
+        return;
+    }
+
+    try {
+        voice::DeepLXTranslator translator(voice::DeepLXTranslator::Config{
+            config.deeplx.url,
+            config.deeplx.token,
+            config.deeplx.target_lang
+        });
+
+        // Test cases with different languages
+        std::vector<std::pair<std::string, std::string>> test_cases = {
+            {"Hello, world!", "EN"},
+            {"こんにちは、世界！", "JA"},
+            {"你好，世界！", "ZH"},
+            {"안녕하세요, 세계!", "KO"}
+        };
+
+        std::cout << "Testing translation functionality...\n\n";
+        for (const auto& test : test_cases) {
+            try {
+                std::cout << "Source text (" << test.second << "): " << test.first << "\n";
+                std::string translated = translator.translate(test.first, test.second);
+                std::cout << "Translated text: " << translated << "\n\n";
+            } catch (const std::exception& e) {
+                std::cout << "Translation failed: " << e.what() << "\n\n";
+            }
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Failed to initialize translator: " << e.what() << std::endl;
+    }
 }
 
 int main(int argc, char* argv[]) {
@@ -56,6 +98,7 @@ int main(int argc, char* argv[]) {
     int source_index = -1;
     std::string output_file = "output.raw";
     std::string model_config_path;
+    bool test_translation_flag = false;
     OutputMode mode = OutputMode::FILE;
 
     // Parse command line arguments
@@ -77,6 +120,8 @@ int main(int argc, char* argv[]) {
                 model_config_path = argv[++i];
                 mode = output_file == "output.raw" ? OutputMode::MODEL : OutputMode::BOTH;
             }
+        } else if (arg == "-t" || arg == "--test-translation") {
+            test_translation_flag = true;
         } else if (arg == "-h" || arg == "--help") {
             print_usage();
             return 0;
@@ -97,6 +142,12 @@ int main(int argc, char* argv[]) {
                 std::cerr << "Error loading model configuration: " << e.what() << std::endl;
                 return 1;
             }
+        }
+
+        // Test translation if requested
+        if (test_translation_flag) {
+            test_translation(model_config);
+            return 0;
         }
 
         // Create AudioCapture instance with appropriate mode

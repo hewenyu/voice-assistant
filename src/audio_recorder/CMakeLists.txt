@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.10)
 # 设置源文件
 set(COMMON_SOURCES
     common/wav_writer.cpp
+    common/deeplx_translator.cpp
 )
 
 # 添加头文件目录
@@ -13,6 +14,9 @@ include_directories(
 
 # 查找 yaml-cpp 库
 find_package(yaml-cpp REQUIRED)
+
+# 查找 nlohmann-json
+find_package(nlohmann_json 3.2.0 REQUIRED)
 
 # 根据平台选择实现
 if(WIN32)
@@ -49,6 +53,7 @@ add_library(audio_recorder STATIC
 target_link_libraries(audio_recorder
     ${PLATFORM_LIBS}
     voice_service_core
+    nlohmann_json::nlohmann_json
 )
 
 # 创建可执行文件
@@ -64,6 +69,7 @@ target_link_libraries(audio_recorder_app
     ${PULSEAUDIO_LIBRARIES}
     pulse
     pulse-simple
+    nlohmann_json::nlohmann_json
 )
 
 # 安装规则

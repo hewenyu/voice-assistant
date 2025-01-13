@@ -211,6 +211,8 @@ private:
                                 // 提取语言代码
                                 std::string language_code = std::string(result->lang).substr(2, 2);
                                 std::cout << "Language Code: " << language_code << std::endl;
+
+                                // TODO: 翻译
                             }
                             
                             // 如果有 tokens，也输出
