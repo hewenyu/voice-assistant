@@ -142,4 +142,5 @@ set_target_properties(voice_server PROPERTIES
     INSTALL_RPATH "${SHERPA_ONNX_LIB_DIR}"
 )
 
-# Main voice-assistant executabl
+# Add audio recorder subproject
+add_subdirectory(audio_recorder)
