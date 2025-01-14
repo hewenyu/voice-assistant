@@ -11,6 +11,7 @@
 namespace linux_pulse {
 
 class PulseAudioCapture : public audio::IAudioCapture {
+
 public:
     explicit PulseAudioCapture(const common::ModelConfig& config);
     ~PulseAudioCapture() override;
@@ -29,6 +30,8 @@ private:
     bool is_recording_;
     
 
+    std::map<std::string, std::string> available_sources_;
+    std::map<uint32_t, std::string> available_applications_;
     // Audio format settings
     audio::AudioFormat format_;
     pa_sample_spec source_spec_;
