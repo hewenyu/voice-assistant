@@ -174,15 +174,6 @@ bool PulseAudioCapture::start_recording_application(uint32_t app_id) {
 
     app_name_ = it->second;
 
-    // 创建WAV写入器
-    if (!output_path.empty()) {
-        wav_writer_ = std::make_unique<WavWriter>();
-        if (!wav_writer_->open(output_path, format_)) {
-            std::cerr << "Failed to open output file" << std::endl;
-            return false;
-        }
-    }
-
     pa_threaded_mainloop_lock(mainloop_);
 
     // 创建录制流
@@ -225,11 +216,6 @@ void PulseAudioCapture::stop_recording() {
         pa_stream_unref(stream_);
         stream_ = nullptr;
         pa_threaded_mainloop_unlock(mainloop_);
-    }
-
-    if (wav_writer_) {
-        wav_writer_->close();
-        wav_writer_.reset();
     }
 }
 
