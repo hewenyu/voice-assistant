@@ -70,6 +70,7 @@ add_library(voice_service_core
     core/voice_service_impl.cpp
     core/voice_service_impl.h
     core/model_config.h
+    core/uuid_generator.h
 )
 
 target_include_directories(voice_service_core
@@ -79,14 +80,26 @@ target_include_directories(voice_service_core
     ${SHERPA_ONNX_INCLUDE_DIR}
 )
 
-target_link_libraries(voice_service_core
-    PUBLIC
-    voice_service_proto
-    sherpa-onnx-c-api
-    sherpa-onnx-cxx-api
-    yaml-cpp
-    uuid
-)
+# Set platform-specific dependencies
+if(WIN32)
+    target_link_libraries(voice_service_core
+        PUBLIC
+        voice_service_proto
+        sherpa-onnx-c-api
+        sherpa-onnx-cxx-api
+        yaml-cpp
+        rpcrt4
+    )
+else()
+    target_link_libraries(voice_service_core
+        PUBLIC
+        voice_service_proto
+        sherpa-onnx-c-api
+        sherpa-onnx-cxx-api
+        yaml-cpp
+        uuid
+    )
+endif()
 
 # Server executable
 add_executable(voice_server

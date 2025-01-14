@@ -1,5 +1,6 @@
 #include "core/voice_service_impl.h"
 #include "core/model_factory.h"
+#include "core/uuid_generator.h"
 
 // C++ Standard Library
 #include <iostream>
@@ -8,7 +9,6 @@
 #include <thread>
 #include <cstdio>
 #include <cstring>
-#include <uuid/uuid.h>
 #include <sstream>
 
 namespace voice {
@@ -283,11 +283,7 @@ grpc::Status VoiceServiceImpl::AsyncRecognize(
     AsyncRecognizeResponse* response) {
     
     // Generate operation ID
-    uuid_t uuid;
-    uuid_generate(uuid);
-    char uuid_str[37];
-    uuid_unparse_lower(uuid, uuid_str);
-    std::string operation_id(uuid_str);
+    std::string operation_id = UuidGenerator::GenerateUuid();
 
     // Store operation
     {
@@ -525,5 +521,4 @@ grpc::Status VoiceServiceImpl::StreamingRecognize(
 
     return grpc::Status::OK;
 }
-
 } // namespace voice 
