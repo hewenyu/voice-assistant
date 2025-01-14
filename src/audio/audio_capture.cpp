@@ -6,12 +6,13 @@
 
 namespace audio {
 
-std::unique_ptr<IAudioCapture> IAudioCapture::CreateAudioCapture(common::ModelConfig& config) {
+std::unique_ptr<IAudioCapture> IAudioCapture::CreateAudioCapture() {
 #ifdef _WIN32
-    return std::make_unique<windows::WasapiCapture>(config);
+    return std::make_unique<windows::WasapiCapture>();
 #else
-    return std::make_unique<linux_pulse::PulseAudioCapture>(config);
+    return std::make_unique<linux_pulse::PulseAudioCapture>();
 #endif
 }
+
 
 } // namespace audio 

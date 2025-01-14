@@ -23,7 +23,8 @@ public:
     virtual void list_applications() = 0;
 
     // Factory method to create audio capture instance
-    static std::unique_ptr<IAudioCapture> CreateAudioCapture(common::ModelConfig& config);
+    static std::unique_ptr<IAudioCapture> CreateAudioCapture();
+    
 };
 
 } // namespace audio 

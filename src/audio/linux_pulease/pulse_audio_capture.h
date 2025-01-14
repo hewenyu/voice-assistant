@@ -14,7 +14,7 @@ namespace linux_pulse {
 class PulseAudioCapture : public audio::IAudioCapture {
 
 public:
-    explicit PulseAudioCapture(const common::ModelConfig& config);
+    explicit PulseAudioCapture();
     ~PulseAudioCapture() override;
 
     // IAudioCapture interface implementation

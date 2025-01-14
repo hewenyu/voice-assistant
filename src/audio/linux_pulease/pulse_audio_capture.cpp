@@ -6,7 +6,7 @@
 
 namespace linux_pulse {
 
-PulseAudioCapture::PulseAudioCapture(const common::ModelConfig& config)
+PulseAudioCapture::PulseAudioCapture()
     : mainloop_(nullptr)
     , context_(nullptr)
     , stream_(nullptr)
@@ -21,7 +21,7 @@ PulseAudioCapture::PulseAudioCapture(const common::ModelConfig& config)
     source_spec_.channels = format_.channels;
     
     target_spec_ = source_spec_;
-    recognizer_ = std::make_unique<recognizer::Recognizer>(config);
+    // recognizer_ = std::make_unique<recognizer::Recognizer>(config);
 }
 
 PulseAudioCapture::~PulseAudioCapture() {
@@ -74,7 +74,7 @@ bool PulseAudioCapture::initialize() {
     pa_threaded_mainloop_start(mainloop_);
 
     // 初始化识别器
-    recognizer_->initialize();
+    // recognizer_->initialize();
 
     return true;
 }

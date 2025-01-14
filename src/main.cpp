@@ -83,6 +83,14 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    if (list_sources) {
+        std::cout << "Listing available audio sources..." << std::endl;
+        // Create audio capture instance
+        auto audio_capture = audio::IAudioCapture::CreateAudioCapture();
+        audio_capture->list_applications();
+        return 0;
+    }
+
     try {
         // Load model configuration
         common::ModelConfig model_config;
@@ -94,7 +102,16 @@ int main(int argc, char* argv[]) {
         }
 
         // Create audio capture instance
-        auto audio_capture = audio::IAudioCapture::CreateAudioCapture(model_config);
+        auto audio_capture = audio::IAudioCapture::CreateAudioCapture();
+        if (!audio_capture) {
+            std::cerr << "Failed to create audio capture instance." << std::endl;
+            return 1;
+        }
+
+        if (!audio_capture->initialize()) {
+            std::cerr << "Failed to initialize audio capture." << std::endl;
+            return 1;
+        }
 
         if (list_sources) {
             audio_capture->list_applications();
@@ -104,18 +121,6 @@ int main(int argc, char* argv[]) {
         if (source_index < 0) {
             std::cerr << "Please specify a valid source index with -s option." << std::endl;
             return 1;
-        }
-
-        // Initialize recognizer
-        auto recognizer = std::make_unique<recognizer::Recognizer>(model_config);
-        
-        // Initialize translator if enabled
-        std::unique_ptr<translator::ITranslator> translator;
-        if (model_config.deeplx.enabled) {
-            translator = translator::CreateTranslator(
-                translator::TranslatorType::DeepLX,
-                model_config
-            );
         }
 
         // Start audio capture
