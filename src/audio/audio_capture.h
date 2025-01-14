@@ -7,12 +7,6 @@
 
 namespace audio {
 
-struct AudioFormat {
-    int sample_rate;
-    int channels;
-    int bits_per_sample;
-};
-
 class IAudioCapture {
 public:
     virtual ~IAudioCapture() = default;
@@ -32,5 +26,11 @@ public:
     // 工厂方法创建平台特定实现
     static std::unique_ptr<IAudioCapture> create(const common::ModelConfig& config);
 };
+
+// LINUX 平台特定实现 USE PulseAudio create
+
+// 
+
+// WINDOWS 平台特定实现 USE WASAPI
 
 } // namespace voice 

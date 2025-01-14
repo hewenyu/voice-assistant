@@ -1,6 +1,7 @@
 #include "pulse_audio_capture.h"
-#include <audio/audio_capture.h>
+#include <audio/audio_format.h>
 #include <common/model_config.h>
+#include <recognizer/model_factory.h>
 #include <iostream>
 
 namespace linux_pulse {
@@ -20,6 +21,7 @@ PulseAudioCapture::PulseAudioCapture(const common::ModelConfig& config)
     source_spec_.channels = format_.channels;
     
     target_spec_ = source_spec_;
+    recognizer_ = std::make_unique<recognizer::Recognizer>(config);
 }
 
 PulseAudioCapture::~PulseAudioCapture() {
@@ -71,6 +73,9 @@ bool PulseAudioCapture::initialize() {
 
     pa_threaded_mainloop_start(mainloop_);
 
+    // 初始化识别器
+    recognizer_->initialize();
+
     return true;
 }
 
@@ -110,9 +115,9 @@ void PulseAudioCapture::stream_read_cb(pa_stream* s, size_t length, void* userda
         return;
     }
 
-    if (data && length > 0 && capture->wav_writer_) {
-        capture->wav_writer_->write(data, length);
-    }
+    // if (data && length > 0 && capture->wav_writer_) {
+    //     capture->wav_writer_->write(data, length);
+    // }
 
     pa_stream_drop(s);
 }

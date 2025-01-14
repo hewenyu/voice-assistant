@@ -4,8 +4,10 @@
 #include <pulse/thread-mainloop.h>
 #include <map>
 #include <memory>
-#include <audio/audio_capture.h>
+#include <audio/audio_format.h>
 #include <common/model_config.h>
+#include <recognizer/recognizer.h>
+
 namespace linux_pulse {
 
 class PulseAudioCapture : public audio::IAudioCapture {
@@ -31,6 +33,9 @@ private:
     audio::AudioFormat format_;
     pa_sample_spec source_spec_;
     pa_sample_spec target_spec_;
+
+    // recognizer_
+    std::unique_ptr<recognizer::Recognizer> recognizer_;
 
     // Callback functions
     static void context_state_cb(pa_context* c, void* userdata);
