@@ -14,6 +14,15 @@ set(SHERPA_ONNX_LIB_DIR ${SHERPA_ONNX_ROOT}/lib)
 # Add sherpa-onnx link directory
 link_directories(${SHERPA_ONNX_LIB_DIR})
 
+# Set gRPC plugin path based on platform
+if(WIN32)
+    if(NOT DEFINED GRPC_CPP_PLUGIN_PATH)
+        set(GRPC_CPP_PLUGIN_PATH "E:/vcpkg/installed/x64-windows/tools/grpc/grpc_cpp_plugin.exe")
+    endif()
+else()
+    set(GRPC_CPP_PLUGIN_PATH "/usr/bin/grpc_cpp_plugin")
+endif()
+
 # Generate protobuf files
 get_filename_component(voice_service_proto "proto/voice_service.proto" ABSOLUTE)
 get_filename_component(voice_service_proto_path "${voice_service_proto}" PATH)
@@ -32,7 +41,7 @@ add_custom_command(
     ARGS --grpc_out "${CMAKE_CURRENT_BINARY_DIR}"
          --cpp_out "${CMAKE_CURRENT_BINARY_DIR}"
          -I "${voice_service_proto_path}"
-         --plugin=protoc-gen-grpc=/usr/bin/grpc_cpp_plugin
+         --plugin=protoc-gen-grpc="${GRPC_CPP_PLUGIN_PATH}"
          "${voice_service_proto}"
     DEPENDS "${voice_service_proto}"
 )
