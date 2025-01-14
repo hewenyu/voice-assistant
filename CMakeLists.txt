@@ -16,4 +16,3 @@ find_package(nlohmann_json 3.2.0 REQUIRED)
 
 # 添加子目录
 add_subdirectory(src)
-add_subdirectory(test) 

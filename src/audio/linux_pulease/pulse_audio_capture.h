@@ -34,6 +34,12 @@ private:
     pa_sample_spec source_spec_;
     pa_sample_spec target_spec_;
 
+
+
+    static constexpr int SAMPLE_RATE = 16000;  // Required by VAD
+    static constexpr int CHANNELS = 1;         // Mono for speech recognition
+    static constexpr int BITS_PER_SAMPLE = 16; // S16LE format
+
     // recognizer_
     std::unique_ptr<recognizer::Recognizer> recognizer_;
 
