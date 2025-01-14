@@ -6,11 +6,11 @@
 #include "model_config.h"
 #include "sherpa-onnx/c-api/c-api.h"
 
-namespace voice {
+namespace recognizer {
 
 class ModelFactory {
 public:
-    static std::string DetectLanguage(const ModelConfig& config, const float* samples, int32_t n) {
+    static std::string DetectLanguage(const common::ModelConfig& config, const float* samples, int32_t n) {
         // Create language identification config using whisper configuration
         SherpaOnnxSpokenLanguageIdentificationConfig slid_config = {};
         
@@ -59,7 +59,7 @@ public:
     }
 
     static const SherpaOnnxOfflineRecognizer* CreateModel(
-        const ModelConfig& config,
+        const common::ModelConfig& config,
         const float* samples = nullptr,
         int32_t n = 0) {
         // Zero initialization
@@ -118,4 +118,4 @@ public:
     }
 };
 
-} // namespace voice 
+} // namespace recognizer 

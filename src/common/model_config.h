@@ -5,7 +5,7 @@
 #include <fstream>
 #include <stdexcept>
 
-namespace voice {
+namespace common {
 
 struct WhisperConfig {
     std::string encoder_path;

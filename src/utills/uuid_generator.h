@@ -10,7 +10,7 @@
 #include <uuid/uuid.h>
 #endif
 
-namespace voice {
+namespace utils {
 
 class UuidGenerator {
 public:
@@ -33,4 +33,4 @@ public:
     }
 };
 
-} // namespace voice 
+} // namespace utils 

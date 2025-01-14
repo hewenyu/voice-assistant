@@ -8,8 +8,8 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <unistd.h>
-
 #endif
+#include <cstring>
 #include <algorithm>
 #include <nlohmann/json.hpp>
 #include <regex>
@@ -18,10 +18,24 @@
 #include <sstream>
 #include <iostream>
 #include "deeplx_translator.h"
+#include "common/model_config.h"
 
-namespace voice {
 
-DeepLXTranslator::DeepLXTranslator(const Config& config) : config_(config) {
+namespace deeplx {
+
+DeepLXTranslator::DeepLXTranslator(const common::ModelConfig& config) {
+
+    // deeplx::DeepLXTranslator::Config
+    deeplx::DeepLXTranslator::Config config_;
+
+    if (!config.deeplx.enabled) {
+        std::cout << "Translation is not enabled in config\n";
+        return;
+    }
+    config_.url = config.deeplx.url;
+    config_.token = config.deeplx.token;
+    config_.target_lang = config.deeplx.target_lang;
+
     std::cout << "URL: " << config_.url << std::endl;
     std::regex url_regex("http://([^/:]+):?(\\d*)(/.*)?");
     std::smatch matches;
@@ -29,7 +43,7 @@ DeepLXTranslator::DeepLXTranslator(const Config& config) : config_(config) {
         throw std::runtime_error("Invalid URL format"); 
     }
     std::cout << "Matches: " << matches.size() << std::endl;
-    if (std::regex_match(config.url, matches, url_regex)) {
+    if (std::regex_match(config_.url, matches, url_regex)) {
         host_ = matches[1].str();
         std::cout << "Host: " << host_ << std::endl;
         port_ = matches[2].length() > 0 ? std::stoi(matches[2].str()) : 80;
@@ -179,4 +193,4 @@ std::string DeepLXTranslator::translate(const std::string& text, const std::stri
     }
 }
 
-} // namespace voice 
+} // namespace deeplx 
