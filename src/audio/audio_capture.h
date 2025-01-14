@@ -1,17 +1,8 @@
 #pragma once
 
-#include <string>
-#include <vector>
 #include <memory>
+#include <functional>
 #include "common/model_config.h"
-
-#ifdef __linux__
-#include "linux_pulease/pulse_audio_capture.h"
-#endif
-
-#ifdef _WIN32
-#include "windows/wasapi_audio_capture.h"
-#endif
 
 namespace audio {
 
@@ -19,19 +10,19 @@ class IAudioCapture {
 public:
     virtual ~IAudioCapture() = default;
 
-    // 初始化音频捕获
+    // Initialize audio capture
     virtual bool initialize() = 0;
 
-    // 开始录制指定应用的音频
-    virtual bool start_recording_application(uint32_t app_id) = 0;
+    // Start recording from a specific application
+    virtual bool start_recording_application(unsigned int pid) = 0;
 
-    // 停止录制
+    // Stop recording
     virtual void stop_recording() = 0;
 
-    // 列出可用的音频应用
+    // List available applications
     virtual void list_applications() = 0;
 
-    // 工厂方法创建平台特定实现
+    // Factory method to create audio capture instance
     static std::unique_ptr<IAudioCapture> CreateAudioCapture(common::ModelConfig& config);
 };
 

@@ -7,7 +7,7 @@
 #include <map>
 #include "sherpa-onnx/c-api/c-api.h"
 #include <common/model_config.h>
-#include <translator/deepl/deeplx_translator.h>
+#include <translator/translator.h>
 
 namespace recognizer {
 
@@ -42,7 +42,7 @@ private:
     std::string translate(const std::string& text, const std::string& source_lang);
 
     // Translation support
-    std::unique_ptr<deeplx::DeepLXTranslator> translator_;
+    std::unique_ptr<translator::ITranslator> translator_;
 };
 
 } // namespace recognizer

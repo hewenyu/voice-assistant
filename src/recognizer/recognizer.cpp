@@ -193,12 +193,12 @@ std::string Recognizer::translate(const std::string& text, const std::string& so
             if (url.find("http://") != 0 && url.find("https://") != 0) {
                 url = "http://" + url;
             }
+            model_config_.deeplx.url = url;
             // create translator
-            translator_ = std::make_unique<deeplx::DeepLXTranslator>(deeplx::DeepLXTranslator::Config{
-                url,
-                model_config_.deeplx.token,
-                model_config_.deeplx.target_lang
-            });
+            translator_ = translator::CreateTranslator(
+                translator::TranslatorType::DeepLX,
+                model_config_
+            );
         }
         return translator_->translate(text, source_lang);
     } catch (const std::exception& e) {

@@ -1,155 +1,101 @@
-#ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#pragma comment(lib, "ws2_32.lib")
-#else
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <unistd.h>
-#endif
-#include <cstring>
+#include "translator/deepl/deeplx_translator.h"
+#include <regex>
+#include <sstream>
+#include <stdexcept>
 #include <algorithm>
 #include <nlohmann/json.hpp>
-#include <regex>
-#include <string>
-#include <stdexcept>
-#include <sstream>
-#include <iostream>
-#include "deeplx_translator.h"
-#include "common/model_config.h"
 
+using json = nlohmann::json;
+
+namespace {
+
+size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::string* userp) {
+    userp->append((char*)contents, size * nmemb);
+    return size * nmemb;
+}
+
+} // namespace
 
 namespace deeplx {
 
 DeepLXTranslator::DeepLXTranslator(const common::ModelConfig& config) {
+    url_ = config.deeplx.url;
+    token_ = config.deeplx.token;
+    target_lang_ = config.deeplx.target_lang;
 
-    // deeplx::DeepLXTranslator::Config
-    deeplx::DeepLXTranslator::Config config_;
-
-    if (!config.deeplx.enabled) {
-        std::cout << "Translation is not enabled in config\n";
-        return;
-    }
-    config_.url = config.deeplx.url;
-    config_.token = config.deeplx.token;
-    config_.target_lang = config.deeplx.target_lang;
-
-    std::cout << "URL: " << config_.url << std::endl;
-    std::regex url_regex("http://([^/:]+):?(\\d*)(/.*)?");
+    // Parse URL to get host, port, and path
+    std::regex url_regex("^(https?://)?([^/:]+)(?::(\\d+))?(/.*)?$");
     std::smatch matches;
-    if (!std::regex_match(config_.url, matches, url_regex)) {
-        throw std::runtime_error("Invalid URL format"); 
-    }
-    std::cout << "Matches: " << matches.size() << std::endl;
-    if (std::regex_match(config_.url, matches, url_regex)) {
-        host_ = matches[1].str();
-        std::cout << "Host: " << host_ << std::endl;
-        port_ = matches[2].length() > 0 ? std::stoi(matches[2].str()) : 80;
-        std::cout << "Port: " << port_ << std::endl;    
-        path_ = matches[3].length() > 0 ? matches[3].str() : "/";
-        std::cout << "Path: " << path_ << std::endl;
+    if (std::regex_match(url_, matches, url_regex)) {
+        host_ = matches[2].str();
+        port_ = matches[3].length() > 0 ? std::stoi(matches[3].str()) : 80;
+        path_ = matches[4].length() > 0 ? matches[4].str() : "/";
     } else {
         throw std::runtime_error("Invalid URL format");
+    }
+
+    curl_ = curl_easy_init();
+    if (!curl_) {
+        throw std::runtime_error("Failed to initialize CURL");
     }
 }
 
 DeepLXTranslator::~DeepLXTranslator() {
-#ifdef _WIN32
-    WSACleanup();
-#endif
+    if (curl_) {
+        curl_easy_cleanup(curl_);
+    }
 }
 
 bool DeepLXTranslator::needs_translation(const std::string& source_lang) const {
+    std::string target_upper = target_lang_;
     std::string source_upper = source_lang;
-    std::string target_upper = config_.target_lang;
-    std::transform(source_upper.begin(), source_upper.end(), source_upper.begin(), ::toupper);
     std::transform(target_upper.begin(), target_upper.end(), target_upper.begin(), ::toupper);
+    std::transform(source_upper.begin(), source_upper.end(), source_upper.begin(), ::toupper);
     return source_upper != target_upper;
 }
 
 std::string DeepLXTranslator::make_http_request(const std::string& host, int port,
-                                              const std::string& path, const std::string& body) {
-    // Create socket
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) {
-        throw std::runtime_error("Failed to create socket");
-    }
-
-    // Get host by name
-    struct hostent* server = gethostbyname(host.c_str());
-    if (server == nullptr) {
-        close(sock);
-        throw std::runtime_error("Failed to resolve host");
-    }
-
-    // Setup socket address
-    struct sockaddr_in server_addr;
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    memcpy(&server_addr.sin_addr.s_addr, server->h_addr, server->h_length);
-    server_addr.sin_port = htons(port);
-
-    // Connect
-    if (connect(sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-        close(sock);
-        throw std::runtime_error("Failed to connect to server");
-    }
-
-    // Prepare HTTP request
-    std::stringstream request;
-    request << "POST " << path << " HTTP/1.1\r\n"
-            << "Host: " << host << "\r\n"
-            << "Content-Type: application/json\r\n"
-            << "Authorization: Bearer " << config_.token << "\r\n"
-            << "Content-Length: " << body.length() << "\r\n"
-            << "Connection: close\r\n"
-            << "\r\n"
-            << body;
-
-    std::string request_str = request.str();
-    if (send(sock, request_str.c_str(), request_str.length(), 0) != static_cast<ssize_t>(request_str.length())) {
-        close(sock);
-        throw std::runtime_error("Failed to send request");
-    }
-
-    // Read response
+                                              const std::string& path, const std::string& data) {
     std::string response;
-    char buffer[4096];
-    ssize_t bytes_received;
-    while ((bytes_received = recv(sock, buffer, sizeof(buffer) - 1, 0)) > 0) {
-        buffer[bytes_received] = '\0';
-        response += buffer;
+    std::string url = "http://" + host + ":" + std::to_string(port) + path;
+
+    curl_easy_setopt(curl_, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl_, CURLOPT_POST, 1L);
+    curl_easy_setopt(curl_, CURLOPT_POSTFIELDS, data.c_str());
+    curl_easy_setopt(curl_, CURLOPT_WRITEFUNCTION, WriteCallback);
+    curl_easy_setopt(curl_, CURLOPT_WRITEDATA, &response);
+
+    struct curl_slist* headers = nullptr;
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+    if (!token_.empty()) {
+        std::string auth_header = "Authorization: Bearer " + token_;
+        headers = curl_slist_append(headers, auth_header.c_str());
+    }
+    curl_easy_setopt(curl_, CURLOPT_HTTPHEADER, headers);
+
+    CURLcode res = curl_easy_perform(curl_);
+    curl_slist_free_all(headers);
+
+    if (res != CURLE_OK) {
+        throw std::runtime_error(std::string("CURL request failed: ") + curl_easy_strerror(res));
     }
 
-    close(sock);
     return response;
 }
 
-DeepLXTranslator::HttpResponse DeepLXTranslator::send_post_request(const std::string& json_data) {
-    std::string response = make_http_request(host_, port_, path_, json_data);
+deeplx::DeepLXTranslator::HttpResponse DeepLXTranslator::send_post_request(const std::string& json_data) {
+    std::string response_str = make_http_request(host_, port_, path_, json_data);
     
-    // Parse HTTP response
-    size_t header_end = response.find("\r\n\r\n");
-    if (header_end == std::string::npos) {
-        throw std::runtime_error("Invalid HTTP response");
+    HttpResponse response;
+    try {
+        json responseJson = json::parse(response_str);
+        response.status_code = responseJson["code"].get<int>();
+        response.body = response_str;
+    } catch (const std::exception& e) {
+        throw std::runtime_error(std::string("Failed to parse response: ") + e.what());
     }
-
-    // Get status code
-    size_t status_line_end = response.find("\r\n");
-    std::string status_line = response.substr(0, status_line_end);
-    std::regex status_regex("HTTP/\\d\\.\\d (\\d+)");
-    std::smatch status_match;
-    int status_code = 500;
-    if (std::regex_search(status_line, status_match, status_regex)) {
-        status_code = std::stoi(status_match[1].str());
-    }
-
-    // Get body
-    std::string body = response.substr(header_end + 4);
-
-    return HttpResponse{status_code, body};
+    
+    return response;
 }
 
 std::string DeepLXTranslator::translate(const std::string& text, const std::string& source_lang) {
@@ -157,39 +103,26 @@ std::string DeepLXTranslator::translate(const std::string& text, const std::stri
         return text;
     }
 
-    nlohmann::json requestJson = {
+    json requestJson = {
         {"text", text},
         {"source_lang", source_lang},
-        {"target_lang", config_.target_lang}
+        {"target_lang", target_lang_}
     };
+
     std::string jsonStr = requestJson.dump();
 
     try {
         auto response = send_post_request(jsonStr);
-        if (response.status_code != 200) {
-            throw std::runtime_error("Server returned error status: " + 
-                                   std::to_string(response.status_code));
-        }
+        json responseJson = json::parse(response.body);
 
-        auto responseJson = nlohmann::json::parse(response.body);
-        
-        // Check if the response code is successful
         if (responseJson["code"].get<int>() != 200) {
-            throw std::runtime_error("Translation API returned error code: " + 
+            throw std::runtime_error("Translation API returned error code: " +
                                    std::to_string(responseJson["code"].get<int>()));
         }
 
-        // Return the main translation result
         return responseJson["data"].get<std::string>();
-
-        // Note: The response also contains:
-        // - alternatives: array of alternative translations
-        // - id: translation request ID
-        // - method: translation method used
-        // - source_lang: detected/used source language
-        // - target_lang: target language
     } catch (const std::exception& e) {
-        throw std::runtime_error("Translation failed: " + std::string(e.what()));
+        throw std::runtime_error(std::string("Translation failed: ") + e.what());
     }
 }
 
