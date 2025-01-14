@@ -12,6 +12,13 @@
 #include <codecvt>
 #include <locale>
 
+#ifdef _WIN32
+#include <windows.h>
+#define setenv(name, value, overwrite) _putenv_s(name, value)
+#else
+#include <stdlib.h>
+#endif
+
 using voice::VoiceService;
 using voice::SyncRecognizeRequest;
 using voice::SyncRecognizeResponse;
@@ -35,9 +42,13 @@ protected:
         std::string json_string;
         google::protobuf::util::JsonPrintOptions options;
         options.add_whitespace = true;
-        options.always_print_primitive_fields = true;
-        google::protobuf::util::MessageToJsonString(message, &json_string, options);
-        std::cout << name << ":\n" << json_string << std::endl;
+        options.preserve_proto_field_names = true;
+        
+        std::string json_output;
+        auto status = google::protobuf::util::MessageToJsonString(message, &json_output, options);
+        if (status.ok()) {
+            std::cout << name << ":\n" << json_output << std::endl;
+        }
     }
 
     std::string ReadFile(const char* filename) {
@@ -157,6 +168,20 @@ TEST_F(VoiceRecognitionTest, KoreanRecognition) {
 
 TEST_F(VoiceRecognitionTest, CantoneseRecognition) {
     TestRecognition("test/test_data/yue.wav");
+}
+
+void test_model_config() {
+    // Get config path from environment variable
+    const char* config_path = std::getenv("CONFIG_PATH");
+    if (!config_path) {
+#ifdef _WIN32
+        setenv("CONFIG_PATH", "..\\config\\config.yaml", 1);
+#else
+        setenv("CONFIG_PATH", "../config/config.yaml", 1);
+#endif
+        config_path = std::getenv("CONFIG_PATH");
+    }
+    // ... rest of the test ...
 }
 
 int main(int argc, char **argv) {

@@ -1,22 +1,27 @@
-#include "deeplx_translator.h"
-#include <sstream>
-#include <stdexcept>
-#include <algorithm>
-#include <nlohmann/json.hpp>
-#include <regex>
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#pragma comment(lib, "ws2_32.lib")
+#else
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <unistd.h>
 #include <netdb.h>
+#include <unistd.h>
+
+#endif
+#include <algorithm>
+#include <nlohmann/json.hpp>
+#include <regex>
+#include <string>
+#include <stdexcept>
+#include <sstream>
 #include <iostream>
+#include "deeplx_translator.h"
+
 namespace voice {
 
-DeepLXTranslator::DeepLXTranslator(const Config& config) 
-    : config_(config) {
-    // Parse URL to get host, port and path
-    // 例如 http://localhost:1188/translate
-    // TODO: 解析 URL 获取 host, port 和 path
+DeepLXTranslator::DeepLXTranslator(const Config& config) : config_(config) {
     std::cout << "URL: " << config_.url << std::endl;
     std::regex url_regex("http://([^/:]+):?(\\d*)(/.*)?");
     std::smatch matches;
@@ -37,6 +42,9 @@ DeepLXTranslator::DeepLXTranslator(const Config& config)
 }
 
 DeepLXTranslator::~DeepLXTranslator() {
+#ifdef _WIN32
+    WSACleanup();
+#endif
 }
 
 bool DeepLXTranslator::needs_translation(const std::string& source_lang) const {

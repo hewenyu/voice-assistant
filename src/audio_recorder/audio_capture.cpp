@@ -1,7 +1,12 @@
+#ifdef _WIN32
+#include "windows/wasapi_capture.h"
+#else
 #include <pulse/simple.h>
 #include <pulse/error.h>
 #include <pulse/pulseaudio.h>
 #include <pulse/thread-mainloop.h>
+#endif
+
 #include <string>
 #include <vector>
 #include <iostream>
@@ -59,9 +64,13 @@ enum class OutputMode {
 
 class AudioCapture {
 private:
+#ifdef _WIN32
+    WasapiCapture wasapi_capture_;
+#else
     pa_threaded_mainloop* mainloop_;
     pa_context* context_;
     pa_stream* stream_;
+#endif
     std::string app_name;
     bool is_recording;
     std::vector<int16_t> audio_buffer;  // Buffer for audio data
