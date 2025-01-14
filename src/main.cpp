@@ -1,8 +1,24 @@
 // main.cpp
 
 #include <iostream>
+#include <memory>
+#include <csignal>
+#include <thread>
+#include <atomic>
+
 #include <common/model_config.h>
-#include <audio/audio_capture.h>
+#include <audio/linux_pulease/pulse_audio_capture.h>
+#include <recognizer/recognizer.h>
+#include <translator/translator.h>
+
+std::atomic<bool> g_running{true};
+
+void signal_handler(int signal) {
+    if (signal == SIGINT) {
+        g_running = false;
+    }
+}
+
 void print_usage() {
     std::cout << "Usage: audio_recorder [OPTIONS]\n"
               << "Options:\n"
@@ -35,19 +51,18 @@ void print_usage() {
               << "    target_lang: ZH\n";
 }
 
-
-//main
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         print_usage();
         return 1;
     }
 
+    // Register signal handler for graceful shutdown
+    std::signal(SIGINT, signal_handler);
 
     bool list_sources = false;
     int source_index = -1;
     std::string model_config_path;
-    
 
     // parse command line arguments
     for (int i = 1; i < argc; i++) {
@@ -69,23 +84,59 @@ int main(int argc, char* argv[]) {
     }
 
     try {
-        // Load model configuration if provided
+        // Load model configuration
         common::ModelConfig model_config;
         if (!model_config_path.empty()) {
             model_config = common::ModelConfig::LoadFromFile(model_config_path);
+        } else if (!list_sources) {
+            std::cerr << "Model configuration is required for speech recognition." << std::endl;
+            return 1;
         }
+
+        // Create audio capture instance
+        auto audio_capture = audio::IAudioCapture::CreateAudioCapture(model_config);
+
+        if (list_sources) {
+            audio_capture->list_applications();
+            return 0;
+        }
+
+        if (source_index < 0) {
+            std::cerr << "Please specify a valid source index with -s option." << std::endl;
+            return 1;
+        }
+
+        // Initialize recognizer
+        auto recognizer = std::make_unique<recognizer::Recognizer>(model_config);
+        
+        // Initialize translator if enabled
+        std::unique_ptr<translator::ITranslator> translator;
+        if (model_config.deeplx.enabled) {
+            translator = translator::CreateTranslator(
+                translator::TranslatorType::DeepLX,
+                model_config
+            );
+        }
+
+        // Start audio capture
+        if (!audio_capture->start_recording_application(source_index)) {
+            std::cerr << "Failed to start audio capture." << std::endl;
+            return 1;
+        }
+
+        // Main processing loop
+        while (g_running) {
+            // TODO: Implement audio data reading and processing
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+
+        // Cleanup
+        audio_capture->stop_recording();
+
     } catch (const std::exception& e) {
-        std::cerr << "Error loading model configuration: " << e.what() << std::endl;
+        std::cerr << "Error: " << e.what() << std::endl;
         return 1;
     }
-
-    // Create AudioCapture instance with appropriate mode
-    // audio::IAudioCapture capture(model_config);
-
-    // if (list_sources) {
-    //     capture.list_applications();
-    //     return 0;
-    // }
 
     return 0;
 }

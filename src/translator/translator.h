@@ -21,7 +21,15 @@ namespace translator {
     };
 
     // 创建翻译器
-    std::unique_ptr<ITranslator> CreateTranslator(TranslatorType type, const std::string& config_path);    
+    // 创建翻译器 根据类型
+    std::unique_ptr<ITranslator> CreateTranslator(TranslatorType type, common::ModelConfig& config) {
+        switch (type) {
+            case TranslatorType::DeepLX:
+                return std::make_unique<deeplx::DeepLXTranslator>(config);
+            case TranslatorType::None:
+                return nullptr;
+        }
+    }  
 }
 
 

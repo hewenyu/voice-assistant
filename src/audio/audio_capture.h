@@ -5,6 +5,14 @@
 #include <memory>
 #include "common/model_config.h"
 
+#ifdef __linux__
+#include "linux_pulease/pulse_audio_capture.h"
+#endif
+
+#ifdef _WIN32
+#include "windows/wasapi_audio_capture.h"
+#endif
+
 namespace audio {
 
 class IAudioCapture {
@@ -24,7 +32,7 @@ public:
     virtual void list_applications() = 0;
 
     // 工厂方法创建平台特定实现
-    static std::unique_ptr<IAudioCapture> create(const common::ModelConfig& config);
+    static std::unique_ptr<IAudioCapture> CreateAudioCapture(common::ModelConfig& config);
 };
 
 } // namespace audio 
