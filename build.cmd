@@ -26,7 +26,8 @@ cd build
 echo Configuring with CMake...
 cmake -G "Visual Studio 17 2022" -A x64 ^
     -DCMAKE_TOOLCHAIN_FILE=E:/vcpkg/scripts/buildsystems/vcpkg.cmake ^
-    -DCMAKE_BUILD_TYPE=Release ^
+    -DCMAKE_PREFIX_PATH="E:/vcpkg/installed/x64-windows;%GITHUB_WORKSPACE%/dep/sherpa-onnx/build/install" ^
+    -DGRPC_CPP_PLUGIN_PATH="E:/vcpkg/installed/x64-windows/tools/grpc/grpc_cpp_plugin.exe" ^
     ..
 
 if %ERRORLEVEL% neq 0 (

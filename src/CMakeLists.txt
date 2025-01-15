@@ -49,7 +49,7 @@ if(WIN32)
         PRIVATE
         ${CMAKE_THREAD_LIBS_INIT}
         CURL::libcurl
-        yaml-cpp
+        yaml-cpp::yaml-cpp
         nlohmann_json::nlohmann_json
         sherpa-onnx-c-api
         sherpa-onnx-cxx-api
@@ -61,7 +61,7 @@ else()
         pulse
         pulse-simple
         ${CMAKE_THREAD_LIBS_INIT}
-        ${YAML_CPP_LIBRARIES}
+        yaml-cpp::yaml-cpp
         nlohmann_json::nlohmann_json
         ${CURL_LIBRARIES}
         sherpa-onnx-c-api

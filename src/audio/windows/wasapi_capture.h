@@ -4,7 +4,9 @@
 #include <audio/audio_format.h>
 
 // Windows SDK includes
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
 #include <windows.h>
 #include <audioclient.h>
 #include <mmdeviceapi.h>
