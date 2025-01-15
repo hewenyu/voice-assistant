@@ -20,11 +20,9 @@ enum class TranslatorType {
 class ITranslator {
 public:
     virtual ~ITranslator() = default;
-    virtual std::string translate(const std::string& text, const std::string& source_lang) = 0;
+    virtual std::string translate(const std::string& text, const std::string& source_lang) const = 0;
     // get target language
-    virtual std::string get_target_language() = 0;
-    // get   translator status // enable or disable
-    virtual bool get_status() = 0;
+    virtual std::string get_target_language() const = 0;
 };
 
 // Factory function to create translator

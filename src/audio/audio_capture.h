@@ -30,7 +30,7 @@ public:
     virtual void set_model_recognizer(const SherpaOnnxOfflineRecognizer* recognizer) = 0;
 
     // set model vad
-    virtual void set_model_vad(const SherpaOnnxVoiceActivityDetector* vad, const int window_size) = 0;
+    virtual void set_model_vad(SherpaOnnxVoiceActivityDetector* vad, const int window_size) = 0;
 
     // set translate
     virtual void set_translate(const translator::ITranslator* translate) = 0;

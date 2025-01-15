@@ -3,6 +3,7 @@
 #include <common/model_config.h>
 #include <recognizer/model_factory.h>
 #include <iostream>
+#include <iomanip>
 #include "sherpa-onnx/c-api/c-api.h"
 #include <mutex>
 #include "translator/translator.h"
@@ -57,7 +58,7 @@ void PulseAudioCapture::set_model_recognizer(const SherpaOnnxOfflineRecognizer* 
 
 
 // set model vad
-void PulseAudioCapture::set_model_vad(const SherpaOnnxVoiceActivityDetector* vad, const int window_size) {
+void PulseAudioCapture::set_model_vad(SherpaOnnxVoiceActivityDetector* vad, const int window_size) {
     vad_ = vad;
     window_size_ = window_size;
 }
@@ -88,7 +89,7 @@ void PulseAudioCapture::process_audio_for_recognition(const std::vector<int16_t>
 
     const int window_size = window_size_;
     size_t i = 0;
-    while (i + window_size_ <= float_samples.size()) {
+    while (i + window_size <= float_samples.size()) {
          // Feed window_size samples to VAD
         SherpaOnnxVoiceActivityDetectorAcceptWaveform(
             vad_,
@@ -100,78 +101,82 @@ void PulseAudioCapture::process_audio_for_recognition(const std::vector<int16_t>
             const SherpaOnnxSpeechSegment* segment = 
                     SherpaOnnxVoiceActivityDetectorFront(vad_);
             if (segment) {
-                    // Create a new stream for this segment
-                    const SherpaOnnxOfflineStream* stream = 
-                        SherpaOnnxCreateOfflineStream(recognizer_);
+                // Create a new stream for this segment
+                const SherpaOnnxOfflineStream* stream = 
+                    SherpaOnnxCreateOfflineStream(recognizer_);
 
-                    if (stream) {
-                        // Process the speech segment
-                        SherpaOnnxAcceptWaveformOffline(
-                            stream,
-                            SAMPLE_RATE,
-                            segment->samples,
-                            segment->n
-                        );
+                if (stream) {
+                    // Process the speech segment
+                    SherpaOnnxAcceptWaveformOffline(
+                        stream,
+                        SAMPLE_RATE,
+                        segment->samples,
+                        segment->n
+                    );
 
-                        SherpaOnnxDecodeOfflineStream(recognizer_, stream);
+                    SherpaOnnxDecodeOfflineStream(recognizer_, stream);
 
-                        const SherpaOnnxOfflineRecognizerResult* result = 
-                            SherpaOnnxGetOfflineStreamResult(stream);
+                    const SherpaOnnxOfflineRecognizerResult* result = 
+                        SherpaOnnxGetOfflineStreamResult(stream);
 
-                        if (result && result->text) {
-                            float start = segment->start / static_cast<float>(SAMPLE_RATE);
-                            float duration = segment->n / static_cast<float>(SAMPLE_RATE);
-                            float end = start + duration;
+                    if (result && result->text) {
+                        float start = segment->start / static_cast<float>(SAMPLE_RATE);
+                        float duration = segment->n / static_cast<float>(SAMPLE_RATE);
+                        float end = start + duration;
 
-                            // 输出识别结果，包括时间戳和文本
-                            // std::cout << "\n[Recognition Result]" << std::endl;
-                            std::cout << "Time: " << std::fixed << std::setprecision(3)
-                                      << start << "s -- " << end << "s" << std::endl;
-                            std::cout << "Text: " << result->text << std::endl;
-                            
-                            // 如果有语言标识，也输出
-                            if (result->lang) {
-                                // std::cout << "Language: " << result->lang << std::endl;
-                                // Language: <|zh|>
-                                // 提取语言代码 例如 <|zh|> 提取 zh,并转换为大写
-                                std::string language_code = std::string(result->lang).substr(2, 2);
-                                std::transform(language_code.begin(), language_code.end(), language_code.begin(), ::toupper);
-                                std::cout << "Language Code: " << language_code << std::endl;
+                        // 输出识别结果，包括时间戳和文本
+                        // std::cout << "\n[Recognition Result]" << std::endl;
+                        std::cout << "Time: " << std::fixed << std::setprecision(3)
+                                  << start << "s -- " << end << "s" << std::endl;
+                        std::cout << "Text: " << result->text << std::endl;
 
-                                // 输出 model_config_.deeplx.target_lang,也要大写
-                                std::string target_lang = translate_->get_target_language();
-                                std::transform(target_lang.begin(), target_lang.end(), target_lang.begin(), ::toupper);
-                                std::cout << "Target Language: " << target_lang << std::endl;
-                                // TODO: 翻译 target_lang 和 language_code 不一致时 ，都大写
-                                if (target_lang != language_code && model_config_.deeplx.enabled) {
-                                    std::string translated_text = translate_->translate(result->text, language_code);
-                                    std::cout << "Translated Text: " << translated_text << std::endl;
-                                }
-                               
+                        // 如果有语言标识，也输出
+                        if (result->lang) {
+                            // std::cout << "Language: " << result->lang << std::endl;
+                            // Language: <|zh|>
+                            // 提取语言代码 例如 <|zh|> 提取 zh,并转换为大写
+                            std::string language_code = std::string(result->lang).substr(2, 2);
+                            std::transform(language_code.begin(), language_code.end(), language_code.begin(), ::toupper);
+                            std::cout << "Language Code: " << language_code << std::endl;
+
+                            // 输出 model_config_.deeplx.target_lang,也要大写
+                            std::string target_lang = translate_->get_target_language();
+                            std::transform(target_lang.begin(), target_lang.end(), target_lang.begin(), ::toupper);
+                            std::cout << "Target Language: " << target_lang << std::endl;
+                            // TODO: 翻译 target_lang 和 language_code 不一致时 ，都大写
+                            if (target_lang != language_code) {
+                                std::string translated_text = translate_->translate(result->text, language_code);
+                                std::cout << "Translated Text: " << translated_text << std::endl;
                             }
-                            
-                            // 如果有 tokens，也输出
-                            // if (result->tokens) {
-                            //     std::cout << "Tokens: " << result->tokens << std::endl;
-                            // }
-                            std::cout << std::string(50, '-') << std::endl;
+
                         }
 
-                        // Clean up
-                        SherpaOnnxDestroyOfflineRecognizerResult(result);
-                        SherpaOnnxDestroyOfflineStream(stream);
+                        // 如果有 tokens，也输出
+                        // if (result->tokens) {
+                        //     std::cout << "Tokens: " << result->tokens << std::endl;
+                        // }
+                        std::cout << std::string(50, '-') << std::endl;
                     }
 
-                    SherpaOnnxDestroySpeechSegment(segment);
+                    // Clean up
+                    SherpaOnnxDestroyOfflineRecognizerResult(result);
+                    SherpaOnnxDestroyOfflineStream(stream);
+                }
+
+                SherpaOnnxDestroySpeechSegment(segment);
+            }
+            SherpaOnnxVoiceActivityDetectorPop(vad_);
         }
+        i += window_size;
     }
 
-    // 将音频数据转换为浮点数
-    // 将音频数据转换为浮点数
-    std::vector<float> float_data(audio_data.begin(), audio_data.end());
-
-    // 使用VAD进行处理
-    vad_->AcceptWaveform(float_data.data(), float_data.size());
+    // Store remaining samples for next batch
+    if (i < float_samples.size()) {
+        remaining_samples_.assign(
+            float_samples.begin() + i,
+            float_samples.end()
+        );
+    }
 }
 
 
@@ -261,42 +266,146 @@ void PulseAudioCapture::context_state_cb(pa_context* c, void* userdata) {
 }
 
 void PulseAudioCapture::stream_state_cb(pa_stream* s, void* userdata) {
-    auto* capture = static_cast<PulseAudioCapture*>(userdata);
-    switch (pa_stream_get_state(s)) {
-        case PA_STREAM_READY:
-        case PA_STREAM_FAILED:
-        case PA_STREAM_TERMINATED:
-            pa_threaded_mainloop_signal(capture->mainloop_, 0);
-            break;
-        default:
-            break;
-    }
+    auto *mainloop = static_cast<pa_threaded_mainloop*>(userdata);
+        pa_threaded_mainloop_signal(mainloop, 0);
 }
 
 void PulseAudioCapture::stream_read_cb(pa_stream* s, size_t length, void* userdata) {
-    auto* capture = static_cast<PulseAudioCapture*>(userdata);
-    if (!capture->is_recording_) return;
-
-    const void* data;
-    if (pa_stream_peek(s, &data, &length) < 0) {
-        std::cerr << "Failed to read from stream" << std::endl;
-        return;
-    }
-
-    // if (data && length > 0 && capture->wav_writer_) {
-    //     capture->wav_writer_->write(data, length);
-    // }
-
-    pa_stream_drop(s);
+        // std::cout << "stream_read_cb called with length: " << length << std::endl;
+        auto *ac = static_cast<PulseAudioCapture*>(userdata);
+        const void *data;
+        size_t bytes;
+        
+        if (pa_stream_peek(s, &data, &bytes) < 0) {
+            std::cerr << "Failed to read from stream" << std::endl;
+            return;
+        }
+        
+        // std::cout << "stream_peek returned bytes: " << bytes << ", data ptr: " << data << std::endl;
+        
+        if (!data) {
+            if (bytes > 0) {
+                std::cerr << "Got audio hole of " << bytes << " bytes" << std::endl;
+            }
+            pa_stream_drop(s);
+            return;
+        }
+        
+        if (bytes > 0 && ac->is_recording) {
+            // std::cout << "Processing " << bytes << " bytes of audio data" << std::endl;
+            // Convert audio data to the required format (16kHz, mono, S16LE)
+            const int16_t *samples = static_cast<const int16_t*>(data);
+            size_t num_samples = bytes / sizeof(int16_t);
+            
+            // std::cout << "Number of samples: " << num_samples << std::endl;
+            
+            // If stereo, convert to mono by averaging channels
+            if (ac->source_spec.channels == 2) {
+                // std::cout << "Converting stereo to mono" << std::endl;
+                for (size_t i = 0; i < num_samples; i += 2) {
+                    int32_t mono_sample = (static_cast<int32_t>(samples[i]) + 
+                                         static_cast<int32_t>(samples[i + 1])) / 2;
+                    ac->audio_buffer.push_back(static_cast<int16_t>(mono_sample));
+                }
+            } else {
+                std::cout << "Copying mono samples directly" << std::endl;
+                ac->audio_buffer.insert(ac->audio_buffer.end(), samples, samples + num_samples);
+            }
+            
+            // Resample if needed (simple linear resampling)
+            if (ac->source_spec.rate != SAMPLE_RATE) {
+                std::cout << "Resampling from " << ac->source_spec.rate << " to " << SAMPLE_RATE << std::endl;
+                std::vector<int16_t> resampled;
+                float ratio = static_cast<float>(SAMPLE_RATE) / ac->source_spec.rate;
+                size_t new_size = static_cast<size_t>(ac->audio_buffer.size() * ratio);
+                resampled.reserve(new_size);
+                
+                for (size_t i = 0; i < new_size; ++i) {
+                    float src_idx = i / ratio;
+                    size_t idx1 = static_cast<size_t>(src_idx);
+                    size_t idx2 = idx1 + 1;
+                    if (idx2 >= ac->audio_buffer.size()) idx2 = idx1;
+                    
+                    float frac = src_idx - idx1;
+                    int16_t sample = static_cast<int16_t>(
+                        ac->audio_buffer[idx1] * (1.0f - frac) + 
+                        ac->audio_buffer[idx2] * frac
+                    );
+                    resampled.push_back(sample);
+                }
+                
+                ac->audio_buffer = std::move(resampled);
+            }
+            
+            std::cout << "Final buffer size: " << ac->audio_buffer.size() << " samples" << std::endl;
+        
+            
+            if (ac->recognition_enabled_) {
+                    std::cout << "Processing audio for recognition" << std::endl;
+                    ac->process_audio_for_recognition(ac->audio_buffer);
+                }
+            
+            ac->audio_buffer.clear();  // Clear buffer after processing
+        }
+        
+        pa_stream_drop(s);
 }
 
 void PulseAudioCapture::sink_input_info_cb(pa_context* c, const pa_sink_input_info* i,
                                           int eol, void* userdata) {
-    auto* capture = static_cast<PulseAudioCapture*>(userdata);
-    if (eol > 0) return;
-    if (!i) return;
+    if (!eol && i) {
+        auto *ac = static_cast<PulseAudioCapture*>(userdata);
+        
+        // Get detailed information from property list
+        std::string app_name = "Unknown";
+        
+        // Try different properties to get the most descriptive name
+        const char* media_name = pa_proplist_gets(i->proplist, "media.name");
+        const char* application_name = pa_proplist_gets(i->proplist, "application.name");
+        const char* application_process_name = pa_proplist_gets(i->proplist, "application.process.name");
+        const char* window_title = pa_proplist_gets(i->proplist, "window.title");
+        const char* media_title = pa_proplist_gets(i->proplist, "media.title");
+        const char* media_role = pa_proplist_gets(i->proplist, "media.role");
+        const char* stream_name = i->name;
 
-    capture->available_applications_[i->index] = i->name ? i->name : "Unknown";
+                    // Debug output
+        std::cout << "Properties for sink input " << i->index << ":\n";
+        std::cout << "  media.name: " << (media_name ? media_name : "null") << "\n";
+        std::cout << "  application.name: " << (application_name ? application_name : "null") << "\n";
+        std::cout << "  application.process.name: " << (application_process_name ? application_process_name : "null") << "\n";
+        std::cout << "  window.title: " << (window_title ? window_title : "null") << "\n";
+        std::cout << "  media.title: " << (media_title ? media_title : "null") << "\n";
+        std::cout << "  media.role: " << (media_role ? media_role : "null") << "\n";
+        std::cout << "  stream_name: " << (stream_name ? stream_name : "null") << "\n";
+        
+        // Build descriptive name with available information
+        if (window_title && media_title) {
+            app_name = std::string(window_title) + " - " + media_title;
+        } else if (window_title) {
+            app_name = window_title;
+        } else if (media_title) {
+            app_name = media_title;
+        } else if (media_name) {
+            app_name = media_name;
+        } else if (application_name) {
+            app_name = application_name;
+        } else if (stream_name) {
+            app_name = stream_name;
+        }
+        
+        // Add process name if available and different
+        if (application_process_name && app_name.find(application_process_name) == std::string::npos) {
+            app_name += " (" + std::string(application_process_name) + ")";
+        }
+        
+        ac->available_applications_[i->index] = app_name;
+    }
+        
+    if (eol < 0) {
+        std::cerr << "Error getting sink input info" << std::endl;
+    }
+        
+    pa_threaded_mainloop_signal(static_cast<PulseAudioCapture*>(userdata)->mainloop_, 0);
 }
 
 bool PulseAudioCapture::wait_for_operation(pa_operation* op) {

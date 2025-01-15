@@ -13,13 +13,10 @@ public:
     explicit DeepLXTranslator(const common::ModelConfig& config);
     ~DeepLXTranslator() override;
 
-    std::string translate(const std::string& text, const std::string& source_lang) override;
+    std::string translate(const std::string& text, const std::string& source_lang) const override;
 
     // get target language
-    std::string get_target_language() override;
-
-    // get translator status
-    bool get_status() override;
+    std::string get_target_language() const override;
 
 private:
     struct HttpResponse {

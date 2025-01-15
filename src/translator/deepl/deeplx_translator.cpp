@@ -55,14 +55,10 @@ bool DeepLXTranslator::needs_translation(const std::string& source_lang) const {
 }
 
 // get target language
-std::string DeepLXTranslator::get_target_language() {
+std::string DeepLXTranslator::get_target_language() const {
     return target_lang_;
 }
 
-// get translator status
-bool DeepLXTranslator::get_status() {
-    return enabled_;
-}
 
 std::string DeepLXTranslator::make_http_request(const std::string& host, int port,
                                               const std::string& path, const std::string& data) {
@@ -108,7 +104,7 @@ deeplx::DeepLXTranslator::HttpResponse DeepLXTranslator::send_post_request(const
     return response;
 }
 
-std::string DeepLXTranslator::translate(const std::string& text, const std::string& source_lang) {
+std::string DeepLXTranslator::translate(const std::string& text, const std::string& source_lang) const {
     if (!needs_translation(source_lang)) {
         return text;
     }

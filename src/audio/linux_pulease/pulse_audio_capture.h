@@ -23,7 +23,7 @@ public:
     void stop_recording() override;
     void list_applications() override;
     void set_model_recognizer(const SherpaOnnxOfflineRecognizer* recognizer) override;
-    void set_model_vad(const SherpaOnnxVoiceActivityDetector* vad, const int window_size) override;
+    void set_model_vad(SherpaOnnxVoiceActivityDetector* vad, const int window_size) override;
     void set_translate(const translator::ITranslator* translate) override;
 
 private:

@@ -121,7 +121,7 @@ int main(int argc, char* argv[]) {
 
         // create translator
         auto translator = translator::CreateTranslator(translator::TranslatorType::DeepLX, model_config);
-        audio_capture->set_translate(translator);
+        audio_capture->set_translate(translator.get());
 
         if (list_sources) {
             audio_capture->list_applications();
