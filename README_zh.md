@@ -126,4 +126,13 @@ Translated Text: <翻译文本>（仅当检测语言与目标语言不同时显�
 - 可以使用 Ctrl+C 停止应用程序
 - 确保目标应用程序正在播放音频才能捕获
 - 使用 `-l` 选项查看可用的音频源
-- 仅当检测到的语言与目标语言不同时才进行翻译 
+- 仅当检测到的语言与目标语言不同时才进行翻译
+
+## 致谢
+
+本项目基于以下优秀项目构建和参考：
+
+- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)：强大的语音识别工具包，提供高质量的语音识别能力
+- [obs-studio](https://github.com/obsproject/obs-studio)：音频捕获实现参考了 OBS Studio 的 PulseAudio 捕获模块
+
+感谢这些项目开发者的杰出工作。 

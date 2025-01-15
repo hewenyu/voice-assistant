@@ -127,3 +127,12 @@ Translated Text: <translated text> (if language differs from target)
 - Ensure target application is playing audio before capturing
 - Use `-l` option to check available audio sources before starting
 - Translation is performed only when detected language differs from target language 
+
+## Acknowledgments
+
+This project is built upon and inspired by the following excellent projects:
+
+- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx): A powerful speech recognition toolkit that provides high-quality speech recognition capabilities
+- [obs-studio](https://github.com/obsproject/obs-studio): The audio capture implementation references OBS Studio's PulseAudio capture module
+
+We are grateful to the developers of these projects for their outstanding work. 
