@@ -61,6 +61,7 @@ jobs:
         .\vcpkg install onnxruntime-gpu:x64-windows
         .\vcpkg install nlohmann-json:x64-windows
         .\vcpkg install yaml-cpp:x64-windows
+        .\vcpkg install curl:x64-windows
         .\vcpkg integrate install
         if not exist C:\Windows\System32\protoc.exe copy E:\vcpkg\installed\x64-windows\tools\protobuf\protoc.exe C:\Windows\System32\
         if not exist C:\Windows\System32\grpc_cpp_plugin.exe copy E:\vcpkg\installed\x64-windows\tools\grpc\grpc_cpp_plugin.exe C:\Windows\System32\

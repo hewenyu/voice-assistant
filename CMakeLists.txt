@@ -18,27 +18,38 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Compiler options
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
+if(MSVC)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /Zi")
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /O2")
+else()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
+endif()
 
 # Platform specific dependencies
 if(WIN32)
     # Windows specific dependencies
     add_definitions(-DWIN32_LEAN_AND_MEAN)
     add_definitions(-DNOMINMAX)
+    
+    # Find vcpkg dependencies
+    find_package(CURL CONFIG REQUIRED)
+    find_package(yaml-cpp CONFIG REQUIRED)
+    find_package(nlohmann_json CONFIG REQUIRED)
 else()
     # Linux specific dependencies
     find_package(PulseAudio REQUIRED)
+    find_package(CURL REQUIRED)
+    find_package(YAML-CPP REQUIRED)
+    find_package(nlohmann_json 3.2.0 REQUIRED)
 endif()
 
 # Common dependencies
 find_package(Threads REQUIRED)
-find_package(YAML-CPP REQUIRED)
-find_package(nlohmann_json 3.2.0 REQUIRED)
-find_package(CURL REQUIRED)
 
-# sherpa-onnx 依赖
+# sherpa-onnx dependencies
 set(SHERPA_ONNX_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx/build/install")
 set(SHERPA_ONNX_INCLUDE_DIR "${SHERPA_ONNX_ROOT}/include")
 set(SHERPA_ONNX_LIB_DIR "${SHERPA_ONNX_ROOT}/lib")
@@ -50,9 +61,7 @@ endif()
 # Include directories
 set(COMMON_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${YAML_CPP_INCLUDE_DIR}
     ${SHERPA_ONNX_INCLUDE_DIR}
-    ${CURL_INCLUDE_DIRS}
 )
 
 if(WIN32)
@@ -69,11 +78,17 @@ include_directories(
 # Add link directories
 link_directories(${SHERPA_ONNX_LIB_DIR})
 
-# 添加子目录
+# Add subdirectories
 add_subdirectory(src)
 
-# 打包配置
-set(CPACK_GENERATOR "DEB")
+# Package configuration
+if(WIN32)
+    set(CPACK_GENERATOR "ZIP")
+else()
+    set(CPACK_GENERATOR "DEB")
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libpulse0, libcurl4, libyaml-cpp0.6")
+endif()
+
 set(CPACK_PACKAGE_NAME "voice-assistant")
 set(CPACK_PACKAGE_VENDOR "YueBan")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Audio recorder with speech recognition")
@@ -81,9 +96,5 @@ set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
 set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
 set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
 set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
-
-if(NOT WIN32)
-    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libpulse0, libcurl4, libyaml-cpp0.6")
-endif()
 
 include(CPack)
