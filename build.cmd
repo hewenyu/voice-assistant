@@ -15,6 +15,9 @@ if %ERRORLEVEL% neq 0 (
     echo Please run this script from a Visual Studio Developer Command Prompt
     exit /b 1
 )
+if exist build (
+    rmdir /s /q build
+)
 
 :: Create and enter build directory
 if not exist build (
@@ -26,8 +29,7 @@ cd build
 echo Configuring with CMake...
 cmake -G "Visual Studio 17 2022" -A x64 ^
     -DCMAKE_TOOLCHAIN_FILE=E:/vcpkg/scripts/buildsystems/vcpkg.cmake ^
-    -DCMAKE_PREFIX_PATH="E:/vcpkg/installed/x64-windows;%GITHUB_WORKSPACE%/dep/sherpa-onnx/build/install" ^
-    -DGRPC_CPP_PLUGIN_PATH="E:/vcpkg/installed/x64-windows/tools/grpc/grpc_cpp_plugin.exe" ^
+    -DCMAKE_PREFIX_PATH="E:/vcpkg/installed/x64-windows;E:/code/voice-assistant/dep/sherpa-onnx/build/install" ^
     ..
 
 if %ERRORLEVEL% neq 0 (
