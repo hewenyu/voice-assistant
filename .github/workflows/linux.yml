@@ -26,6 +26,7 @@ jobs:
         apt-get install -y libc-ares-dev libyaml-cpp-dev uuid-dev
         apt-get install -y protobuf-compiler libprotobuf-dev
         apt-get install -y libgrpc++-dev libgrpc-dev protobuf-compiler-grpc
+        apt-get install -y libpulse-dev pulseaudio
 
     - name: Build sherpa-onnx
       run: |
@@ -66,33 +67,34 @@ jobs:
 
     - name: Package artifacts
       run: |
-        mkdir -p artifacts/bin artifacts/lib artifacts/include artifacts/config
-        # Copy main executables if they exist
-        for file in voice_server test_client streaming_client; do
-          if [ -f "build/src/$file" ]; then
-            cp "build/src/$file" artifacts/bin/
-          else
-            echo "Warning: $file not found"
-          fi
-        done
+        mkdir -p artifacts/bin artifacts/lib artifacts/include artifacts/config artifacts/models
         
-        # Copy test executable if it exists
-        if [ -f "build/test/voice_recognition_test" ]; then
-          cp "build/test/voice_recognition_test" artifacts/bin/
-        fi
+        # Copy executable
+        cp build/src/voice_assistant artifacts/bin/
         
-        # Copy configuration template
-        cp config/config.yaml.template artifacts/config/
+        # Copy configuration files
+        cp config/config.yaml artifacts/config/
+        cp README*.md artifacts/
         
-        # Copy sherpa-onnx libraries and headers
+        # Copy sherpa-onnx libraries
         cp -r dep/sherpa-onnx/build/install/lib/* artifacts/lib/
         cp -r dep/sherpa-onnx/build/install/include/* artifacts/include/
         
-        # Copy system dependencies if needed
+        # Copy system dependencies
         ldd artifacts/bin/* | grep "=> /" | awk '{print $3}' | sort -u | xargs -I '{}' cp -v '{}' artifacts/lib/
+        
+        # Create models directory structure
+        mkdir -p artifacts/models/sense_voice artifacts/models/vad
+        touch artifacts/models/sense_voice/.gitkeep
+        touch artifacts/models/vad/.gitkeep
+        
+        # Create archive
+        cd artifacts
+        tar czf ../voice-assistant-linux-x64.tar.gz *
+        cd ..
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v3
       with:
-        name: linux-artifacts
-        path: artifacts/ 
+        name: voice-assistant-linux-x64
+        path: voice-assistant-linux-x64.tar.gz 

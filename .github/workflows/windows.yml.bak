@@ -2,6 +2,12 @@ name: Windows Build
 
 on:
   workflow_call:
+  push:
+    branches:
+      - listen_audio
+  pull_request:
+    branches:
+      - listen_audio
 
 jobs:
   build:

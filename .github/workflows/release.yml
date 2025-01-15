@@ -21,19 +21,14 @@ jobs:
       - name: Download Linux artifacts
         uses: actions/download-artifact@v3
         with:
-          name: linux-artifacts
-          path: artifacts/linux
-
-      - name: Create Release Archives
-        run: |
-          cd artifacts
-          tar -czf voice-assistant-linux.tar.gz linux/
+          name: voice-assistant-linux-x64
+          path: artifacts
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            artifacts/voice-assistant-linux.tar.gz
+            artifacts/voice-assistant-linux-x64.tar.gz
           draft: false
           prerelease: false
           generate_release_notes: true 

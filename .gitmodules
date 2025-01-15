@@ -2,3 +2,7 @@
 	path = dep/sherpa-onnx
 	url = https://github.com/hewenyu/sherpa-onnx.git
 	branch = master
+[submodule "dep/obs-studio"]
+	path = dep/obs-studio
+	url = https://github.com/hewenyu/obs-studio.git
+	branch = master

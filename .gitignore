@@ -70,3 +70,7 @@ build.sh
 run.sh
 
 **/output.wav
+
+
+# src-back directory
+src-back/
