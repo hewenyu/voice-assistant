@@ -46,7 +46,7 @@ private:
     std::vector<float> remaining_samples_;
     std::vector<int16_t> audio_buffer;
     bool is_recording;
-    AudioFormat format_;
+    audio::AudioFormat format_;
     std::mutex recognition_mutex_;
     std::map<unsigned int, std::string> available_applications_;
 
