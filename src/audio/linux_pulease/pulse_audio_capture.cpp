@@ -146,8 +146,12 @@ void PulseAudioCapture::process_audio_for_recognition(const std::vector<int16_t>
                             std::cout << "Target Language: " << target_lang << std::endl;
                             
                             if (target_lang != language_code) {
-                                std::string translated_text = translate_->translate(result->text, language_code);
-                                std::cout << "Translated Text: " << translated_text << std::endl;
+                                try {
+                                    std::string translated_text = translate_->translate(result->text, language_code);
+                                    std::cout << "Translated Text: " << translated_text << std::endl;
+                                } catch (const std::exception& e) {
+                                    std::cerr << "Error translating text: " << e.what() << std::endl;
+                                }
                             }
                         }
                         std::cout << std::string(50, '-') << std::endl;
