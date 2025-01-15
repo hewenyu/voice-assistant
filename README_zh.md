@@ -1,5 +1,7 @@
 # 语音助手
 
+[English](README.md) | [中文](README_zh.md)
+
 基于 Linux 的语音助手，使用 PulseAudio 捕获应用程序音频，支持语音活动检测（VAD）、语音识别和实时翻译功能。
 
 ## 功能特点

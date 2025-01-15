@@ -1,5 +1,7 @@
 # Voice Assistant
 
+[English](README.md) | [中文](README_zh.md)
+
 A Linux-based voice assistant that captures application audio using PulseAudio, performs Voice Activity Detection (VAD), Speech Recognition, and supports real-time translation.
 
 ## Features
