@@ -95,38 +95,70 @@ int main(int argc, char* argv[]) {
     }
 
     try {
+        std::cout << "[DEBUG] Loading model configuration from: " << model_config_path << std::endl;
+        
         // Load model configuration
         common::ModelConfig model_config;
         if (!model_config_path.empty()) {
             model_config = common::ModelConfig::LoadFromFile(model_config_path);
+            std::cout << "[DEBUG] Model configuration loaded successfully" << std::endl;
         } else if (!list_sources) {
             std::cerr << "Model configuration is required for speech recognition." << std::endl;
             return 1;
         }
 
         // Create audio capture instance
+        std::cout << "[DEBUG] Creating audio capture instance..." << std::endl;
         auto audio_capture = audio::IAudioCapture::CreateAudioCapture();
         if (!audio_capture) {
             std::cerr << "Failed to create audio capture instance." << std::endl;
             return 1;
         }
+        std::cout << "[DEBUG] Audio capture instance created successfully" << std::endl;
 
         if (!audio_capture->initialize()) {
             std::cerr << "Failed to initialize audio capture." << std::endl;
             return 1;
         }
+        std::cout << "[DEBUG] Audio capture initialized successfully" << std::endl;
+
         // create recognizer
+        std::cout << "[DEBUG] Creating speech recognizer..." << std::endl;
         auto recognizer = recognizer::ModelFactory::CreateModel(model_config);
+        if (!recognizer) {
+            std::cerr << "Failed to create speech recognizer." << std::endl;
+            return 1;
+        }
+        std::cout << "[DEBUG] Speech recognizer created successfully" << std::endl;
+
+        // create VAD
+        std::cout << "[DEBUG] Creating VAD..." << std::endl;
+        auto vad = recognizer::ModelFactory::CreateVoiceActivityDetector(model_config);
+        if (!vad) {
+            std::cerr << "Failed to create VAD." << std::endl;
+            return 1;
+        }
+        std::cout << "[DEBUG] VAD created successfully" << std::endl;
+
+        // Set VAD first
+        audio_capture->set_model_vad(vad, model_config.vad.window_size);
+        std::cout << "[DEBUG] VAD set to audio capture" << std::endl;
+        
+        // Then set recognizer
         audio_capture->set_model_recognizer(recognizer);
+        std::cout << "[DEBUG] Speech recognizer set to audio capture" << std::endl;
 
         // create translator
+        std::cout << "[DEBUG] Creating translator..." << std::endl;
         auto translator = translator::CreateTranslator(translator::TranslatorType::DeepLX, model_config);
-        audio_capture->set_translate(translator.get());
-
-        if (list_sources) {
-            audio_capture->list_applications();
-            return 0;
+        if (!translator) {
+            std::cerr << "Failed to create translator." << std::endl;
+            return 1;
         }
+        std::cout << "[DEBUG] Translator created successfully" << std::endl;
+        
+        audio_capture->set_translate(translator.get());
+        std::cout << "[DEBUG] Translator set to audio capture" << std::endl;
 
         if (source_index < 0) {
             std::cerr << "Please specify a valid source index with -s option." << std::endl;
@@ -138,18 +170,22 @@ int main(int argc, char* argv[]) {
         signal(SIGTERM, signal_handler);
 
         // Start audio capture
+        std::cout << "[DEBUG] Starting audio capture for source index: " << source_index << std::endl;
         if (!audio_capture->start_recording_application(source_index)) {
             std::cerr << "Failed to start audio capture." << std::endl;
             return 1;
         }
+        std::cout << "[DEBUG] Audio capture started successfully" << std::endl;
 
         // Main processing loop
+        std::cout << "[DEBUG] Entering main processing loop..." << std::endl;
         while (g_running) {
-            // TODO: Implement audio data reading and processing
+            // Sleep for a short duration to prevent busy-waiting
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
 
         // Cleanup
+        std::cout << "[DEBUG] Stopping audio capture..." << std::endl;
         audio_capture->stop_recording();
         std::cout << "\nRecording stopped.\n";
 

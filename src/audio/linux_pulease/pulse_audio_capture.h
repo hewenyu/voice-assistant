@@ -16,7 +16,7 @@ class PulseAudioCapture : public audio::IAudioCapture {
 
 public:
     explicit PulseAudioCapture();
-    ~PulseAudioCapture() override;
+    ~PulseAudioCapture() override ;
 
     // IAudioCapture interface implementation
     bool initialize() override;
