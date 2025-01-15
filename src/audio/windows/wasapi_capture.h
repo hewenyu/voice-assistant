@@ -11,12 +11,18 @@
 #include <audioclient.h>
 #include <mmdeviceapi.h>
 #include <functiondiscoverykeys_devpkey.h>
+#include <Audiopolicy.h>
 
 // STL includes
 #include <vector>
 #include <map>
 #include <mutex>
 #include <string>
+#include <memory>
+#include <thread>
+
+#include "sherpa-onnx/c-api/c-api.h"
+#include "translator/translator.h"
 
 namespace windows_wasapi {
 
@@ -51,21 +57,26 @@ private:
     bool recognition_enabled_;
     
     // Audio processing members
-    std::vector<float> remaining_samples_;
-    std::vector<int16_t> audio_buffer;
+    std::vector<float> remaining_samples_;  // Buffer for remaining samples between VAD windows
+    std::vector<int16_t> audio_buffer;     // Buffer for audio data
     bool is_recording;
-    audio::AudioFormat format_;
+    audio::AudioFormat format_;            // Target audio format (16kHz, mono, 16-bit)
     std::mutex recognition_mutex_;
     std::map<unsigned int, std::string> available_applications_;
-
+    
+    // Audio processing thread
+    std::unique_ptr<std::thread> capture_thread_;
+    std::atomic<bool> capture_thread_running_;
+    
     // Helper methods
     void cleanup();
     void process_audio_for_recognition(const std::vector<int16_t>& audio_data);
+    bool initialize_audio_client(unsigned int pid);
+    void capture_thread_proc();
     
-    // Thread handling
-    static DWORD WINAPI capture_thread(LPVOID param);
-    HANDLE capture_thread_handle_;
-    bool capture_thread_running_;
+    // Audio format conversion
+    std::vector<int16_t> convert_to_mono_16bit(const BYTE* data, UINT32 frames, WAVEFORMATEX* format);
+    std::vector<int16_t> resample_to_16khz(const std::vector<int16_t>& input, int input_rate);
 };
 
 } // namespace windows_wasapi 
