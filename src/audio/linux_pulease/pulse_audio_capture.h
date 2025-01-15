@@ -4,6 +4,7 @@
 #include <pulse/thread-mainloop.h>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <audio/audio_capture.h>
 #include <audio/audio_format.h>
 #include <common/model_config.h>

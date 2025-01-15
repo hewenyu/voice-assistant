@@ -61,7 +61,7 @@ std::string DeepLXTranslator::get_target_language() const {
 
 
 std::string DeepLXTranslator::make_http_request(const std::string& host, int port,
-                                              const std::string& path, const std::string& data) {
+                                              const std::string& path, const std::string& data) const {
     std::string response;
     std::string url = "http://" + host + ":" + std::to_string(port) + path;
 
@@ -89,7 +89,7 @@ std::string DeepLXTranslator::make_http_request(const std::string& host, int por
     return response;
 }
 
-deeplx::DeepLXTranslator::HttpResponse DeepLXTranslator::send_post_request(const std::string& json_data) {
+DeepLXTranslator::HttpResponse DeepLXTranslator::send_post_request(const std::string& json_data) const {
     std::string response_str = make_http_request(host_, port_, path_, json_data);
     
     HttpResponse response;

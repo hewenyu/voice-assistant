@@ -27,9 +27,9 @@ private:
     bool enabled_;
 
     bool needs_translation(const std::string& source_lang) const;
-    HttpResponse send_post_request(const std::string& json_data);
+    HttpResponse send_post_request(const std::string& json_data) const;
     std::string make_http_request(const std::string& host, int port, 
-                                const std::string& path, const std::string& data);
+                                const std::string& path, const std::string& data) const;
 
     std::string url_;
     std::string token_;
@@ -37,7 +37,7 @@ private:
     std::string host_;
     std::string path_;
     int port_;
-    CURL* curl_;
+    mutable CURL* curl_;
 };
 
 } // namespace deeplx 
