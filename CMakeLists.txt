@@ -38,7 +38,7 @@ find_package(YAML-CPP REQUIRED)
 find_package(nlohmann_json 3.2.0 REQUIRED)
 find_package(CURL REQUIRED)
 
-# sherpa-onnx dependencies
+# sherpa-onnx 依赖
 set(SHERPA_ONNX_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx/build/install")
 set(SHERPA_ONNX_INCLUDE_DIR "${SHERPA_ONNX_ROOT}/include")
 set(SHERPA_ONNX_LIB_DIR "${SHERPA_ONNX_ROOT}/lib")
@@ -69,10 +69,10 @@ include_directories(
 # Add link directories
 link_directories(${SHERPA_ONNX_LIB_DIR})
 
-# Add subdirectories
+# 添加子目录
 add_subdirectory(src)
 
-# Package configuration
+# 打包配置
 set(CPACK_GENERATOR "DEB")
 set(CPACK_PACKAGE_NAME "voice-assistant")
 set(CPACK_PACKAGE_VENDOR "YueBan")
