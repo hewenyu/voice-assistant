@@ -22,7 +22,7 @@ DeepLXTranslator::DeepLXTranslator(const common::ModelConfig& config) {
     url_ = config.deeplx.url;
     token_ = config.deeplx.token;
     target_lang_ = config.deeplx.target_lang;
-
+    enabled_ = config.deeplx.enabled;
     // Parse URL to get host, port, and path
     std::regex url_regex("^(https?://)?([^/:]+)(?::(\\d+))?(/.*)?$");
     std::smatch matches;
@@ -52,6 +52,16 @@ bool DeepLXTranslator::needs_translation(const std::string& source_lang) const {
     std::transform(target_upper.begin(), target_upper.end(), target_upper.begin(), ::toupper);
     std::transform(source_upper.begin(), source_upper.end(), source_upper.begin(), ::toupper);
     return source_upper != target_upper;
+}
+
+// get target language
+std::string DeepLXTranslator::get_target_language() {
+    return target_lang_;
+}
+
+// get translator status
+bool DeepLXTranslator::get_status() {
+    return enabled_;
 }
 
 std::string DeepLXTranslator::make_http_request(const std::string& host, int port,

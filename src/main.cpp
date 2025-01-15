@@ -8,8 +8,9 @@
 
 #include <common/model_config.h>
 #include <audio/linux_pulease/pulse_audio_capture.h>
-#include <recognizer/recognizer.h>
 #include <translator/translator.h>
+#include <sherpa-onnx/c-api/c-api.h>
+#include <recognizer/model_factory.h>
 
 std::atomic<bool> g_running{true};
 
@@ -87,7 +88,9 @@ int main(int argc, char* argv[]) {
         std::cout << "Listing available audio sources..." << std::endl;
         // Create audio capture instance
         auto audio_capture = audio::IAudioCapture::CreateAudioCapture();
+        audio_capture->initialize();
         audio_capture->list_applications();
+        // audio_capture->cleanup();
         return 0;
     }
 
@@ -112,6 +115,13 @@ int main(int argc, char* argv[]) {
             std::cerr << "Failed to initialize audio capture." << std::endl;
             return 1;
         }
+        // create recognizer
+        auto recognizer = recognizer::ModelFactory::CreateModel(model_config);
+        audio_capture->set_model_recognizer(recognizer);
+
+        // create translator
+        auto translator = translator::CreateTranslator(translator::TranslatorType::DeepLX, model_config);
+        audio_capture->set_translate(translator);
 
         if (list_sources) {
             audio_capture->list_applications();

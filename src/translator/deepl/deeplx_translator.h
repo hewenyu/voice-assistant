@@ -15,11 +15,19 @@ public:
 
     std::string translate(const std::string& text, const std::string& source_lang) override;
 
+    // get target language
+    std::string get_target_language() override;
+
+    // get translator status
+    bool get_status() override;
+
 private:
     struct HttpResponse {
         int status_code;
         std::string body;
     };
+
+    bool enabled_;
 
     bool needs_translation(const std::string& source_lang) const;
     HttpResponse send_post_request(const std::string& json_data);

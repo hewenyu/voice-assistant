@@ -3,7 +3,8 @@
 #include <memory>
 #include <functional>
 #include "common/model_config.h"
-
+#include "sherpa-onnx/c-api/c-api.h"
+#include "translator/translator.h"
 namespace audio {
 
 class IAudioCapture {
@@ -24,7 +25,15 @@ public:
 
     // Factory method to create audio capture instance
     static std::unique_ptr<IAudioCapture> CreateAudioCapture();
-    
+
+    // set model recognizerFactory method to create recognizer
+    virtual void set_model_recognizer(const SherpaOnnxOfflineRecognizer* recognizer) = 0;
+
+    // set model vad
+    virtual void set_model_vad(const SherpaOnnxVoiceActivityDetector* vad, const int window_size) = 0;
+
+    // set translate
+    virtual void set_translate(const translator::ITranslator* translate) = 0;
 };
 
 } // namespace audio 

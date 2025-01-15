@@ -116,6 +116,35 @@ public:
         recognizer_config.model_config = model_config;
         return SherpaOnnxCreateOfflineRecognizer(&recognizer_config);
     }
+    //  CreateVoiceActivityDetector
+    static SherpaOnnxVoiceActivityDetector* CreateVoiceActivityDetector(const common::ModelConfig& config) {
+        try
+        {
+            // model_path empty
+            if (config.vad.model_path.empty()){
+                throw std::runtime_error("VAD model path is empty");
+            }
+
+            SherpaOnnxVadModelConfig vad_config = {};
+            vad_config.silero_vad.model = config.vad.model_path.c_str();
+            vad_config.silero_vad.threshold = config.vad.threshold;
+            vad_config.silero_vad.min_silence_duration = config.vad.min_silence_duration;
+            vad_config.silero_vad.min_speech_duration = config.vad.min_speech_duration;
+            vad_config.silero_vad.max_speech_duration = config.vad.max_speech_duration;
+            vad_config.silero_vad.window_size = config.vad.window_size;
+            vad_config.sample_rate = config.vad.sample_rate;
+            vad_config.num_threads = config.vad.num_threads;
+            vad_config.debug = config.vad.debug ? 1 : 0;
+            SherpaOnnxVoiceActivityDetector* p = SherpaOnnxCreateVoiceActivityDetector(&vad_config, 30);
+
+            return p;
+        }
+        catch(const std::exception& e)
+        {
+            std::cerr << e.what() << '\n';
+            return nullptr;
+        }
+    }
 };
 
 } // namespace recognizer 
