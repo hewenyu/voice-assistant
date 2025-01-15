@@ -1,6 +1,12 @@
 name: Windows Build
 
 on:
+  push:
+    branches:
+      - windows-dev
+  pull_request:
+    branches:
+      - windows-dev
   workflow_call:
 
 jobs:
