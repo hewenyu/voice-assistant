@@ -1,6 +1,12 @@
 name: Linux Build
 
 on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
   workflow_call:
 
 jobs:
@@ -28,6 +34,7 @@ jobs:
         apt-get install -y libgrpc++-dev libgrpc-dev protobuf-compiler-grpc
         apt-get install -y libpulse-dev pulseaudio
         apt-get install -y nlohmann-json3-dev
+        apt-get install -y libcurl4-openssl-dev
 
     - name: Build sherpa-onnx
       run: |
