@@ -32,31 +32,26 @@ PulseAudioCapture::~PulseAudioCapture() {
 
 void PulseAudioCapture::set_model_recognizer(const SherpaOnnxOfflineRecognizer* recognizer) {
     try {
-        std::cout << "[DEBUG] Setting model recognizer..." << std::endl;
         
         // check vad
         if (!vad_) {
             std::cerr << "[ERROR] VAD is not initialized" << std::endl;
             throw std::runtime_error("VAD is not initialized");
         }
-        std::cout << "[DEBUG] VAD check passed" << std::endl;
         
         recognizer_ = recognizer;
         if (!recognizer_) {
             std::cerr << "[ERROR] Recognizer is not initialized" << std::endl;
             throw std::runtime_error("Recognizer is not initialized");
         }
-        std::cout << "[DEBUG] Recognizer check passed" << std::endl;
         
         recognition_stream_ = SherpaOnnxCreateOfflineStream(recognizer_);
         if (!recognition_stream_) {
             std::cerr << "[ERROR] Failed to create recognition stream" << std::endl;
             throw std::runtime_error("Failed to create recognition stream");
         }
-        std::cout << "[DEBUG] Recognition stream created successfully" << std::endl;
         
         recognition_enabled_ = true;
-        std::cout << "[DEBUG] Recognition enabled" << std::endl;
         
     } catch (const std::exception& e) {
         std::cerr << "Error setting model recognizer: " << e.what() << std::endl;
@@ -78,11 +73,9 @@ void PulseAudioCapture::set_translate(const translator::ITranslator* translate) 
 // process_audio_for_recognition
 void PulseAudioCapture::process_audio_for_recognition(const std::vector<int16_t>& audio_data) {
     if (!recognition_enabled_ || !vad_) {
-        std::cerr << "[DEBUG] Recognition disabled or VAD not initialized" << std::endl;
         return;
     }
     
-    std::cout << "[DEBUG] Processing audio chunk of size: " << audio_data.size() << std::endl;
     
     std::lock_guard<std::mutex> lock(recognition_mutex_);
     // Convert to float samples
@@ -93,7 +86,6 @@ void PulseAudioCapture::process_audio_for_recognition(const std::vector<int16_t>
 
     // If we have remaining samples from last batch, prepend them
     if (!remaining_samples_.empty()) {
-        std::cout << "[DEBUG] Prepending " << remaining_samples_.size() << " remaining samples" << std::endl;
         float_samples.insert(float_samples.begin(),
                            remaining_samples_.begin(),
                            remaining_samples_.end());
@@ -109,15 +101,12 @@ void PulseAudioCapture::process_audio_for_recognition(const std::vector<int16_t>
             float_samples.data() + i,
             window_size
         );
-        std::cout << "[DEBUG] Fed " << window_size << " samples to VAD" << std::endl;
         
         // Process any complete speech segments
         while (!SherpaOnnxVoiceActivityDetectorEmpty(vad_)) {
-            std::cout << "[DEBUG] Processing VAD segment" << std::endl;
             const SherpaOnnxSpeechSegment* segment = 
                     SherpaOnnxVoiceActivityDetectorFront(vad_);
             if (segment) {
-                std::cout << "[DEBUG] Got speech segment of size: " << segment->n << std::endl;
                 
                 // Create a new stream for this segment
                 const SherpaOnnxOfflineStream* stream = 
@@ -131,10 +120,8 @@ void PulseAudioCapture::process_audio_for_recognition(const std::vector<int16_t>
                         segment->samples,
                         segment->n
                     );
-                    std::cout << "[DEBUG] Accepted waveform for processing" << std::endl;
 
                     SherpaOnnxDecodeOfflineStream(recognizer_, stream);
-                    std::cout << "[DEBUG] Decoded speech segment" << std::endl;
 
                     const SherpaOnnxOfflineRecognizerResult* result = 
                         SherpaOnnxGetOfflineStreamResult(stream);
@@ -159,14 +146,13 @@ void PulseAudioCapture::process_audio_for_recognition(const std::vector<int16_t>
                             std::cout << "Target Language: " << target_lang << std::endl;
                             
                             if (target_lang != language_code) {
-                                std::cout << "[DEBUG] Translating text..." << std::endl;
                                 std::string translated_text = translate_->translate(result->text, language_code);
                                 std::cout << "Translated Text: " << translated_text << std::endl;
                             }
                         }
                         std::cout << std::string(50, '-') << std::endl;
                     } else {
-                        std::cout << "[DEBUG] No recognition result or empty text" << std::endl;
+                        std::cout << "No recognition result or empty text" << std::endl;
                     }
 
                     // Clean up
@@ -189,7 +175,6 @@ void PulseAudioCapture::process_audio_for_recognition(const std::vector<int16_t>
             float_samples.begin() + i,
             float_samples.end()
         );
-        std::cout << "[DEBUG] Stored " << remaining_samples_.size() << " samples for next batch" << std::endl;
     }
 }
 

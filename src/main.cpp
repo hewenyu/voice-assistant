@@ -138,27 +138,21 @@ int main(int argc, char* argv[]) {
             std::cerr << "Failed to create VAD." << std::endl;
             return 1;
         }
-        std::cout << "[DEBUG] VAD created successfully" << std::endl;
 
         // Set VAD first
         audio_capture->set_model_vad(vad, model_config.vad.window_size);
-        std::cout << "[DEBUG] VAD set to audio capture" << std::endl;
         
         // Then set recognizer
         audio_capture->set_model_recognizer(recognizer);
-        std::cout << "[DEBUG] Speech recognizer set to audio capture" << std::endl;
 
         // create translator
-        std::cout << "[DEBUG] Creating translator..." << std::endl;
         auto translator = translator::CreateTranslator(translator::TranslatorType::DeepLX, model_config);
         if (!translator) {
             std::cerr << "Failed to create translator." << std::endl;
             return 1;
         }
-        std::cout << "[DEBUG] Translator created successfully" << std::endl;
         
         audio_capture->set_translate(translator.get());
-        std::cout << "[DEBUG] Translator set to audio capture" << std::endl;
 
         if (source_index < 0) {
             std::cerr << "Please specify a valid source index with -s option." << std::endl;
@@ -175,17 +169,14 @@ int main(int argc, char* argv[]) {
             std::cerr << "Failed to start audio capture." << std::endl;
             return 1;
         }
-        std::cout << "[DEBUG] Audio capture started successfully" << std::endl;
 
         // Main processing loop
-        std::cout << "[DEBUG] Entering main processing loop..." << std::endl;
         while (g_running) {
             // Sleep for a short duration to prevent busy-waiting
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
 
         // Cleanup
-        std::cout << "[DEBUG] Stopping audio capture..." << std::endl;
         audio_capture->stop_recording();
         std::cout << "\nRecording stopped.\n";
 
