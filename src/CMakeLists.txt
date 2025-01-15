@@ -61,7 +61,7 @@ else()
         pulse
         pulse-simple
         ${CMAKE_THREAD_LIBS_INIT}
-        yaml-cpp::yaml-cpp
+        yaml-cpp
         nlohmann_json::nlohmann_json
         ${CURL_LIBRARIES}
         sherpa-onnx-c-api
