@@ -30,6 +30,41 @@ cmake ..
 make
 ```
 
+## 模型下载
+
+在运行语音助手之前，需要下载所需的模型文件：
+
+```bash
+# 创建模型目录
+mkdir -p models/whisper
+
+# 下载 Sense Voice 模型（以下二选一）
+# 1. 标准模型（更准确，文件更大）
+wget https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.onnx -O models/model.onnx
+
+# 2. 量化模型（速度更快，文件更小）
+wget https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.int8.onnx -O models/model.int8.onnx
+
+# 下载 Sense Voice 词表文件
+wget https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt -O models/tokens.txt
+
+# 下载 Whisper 模型（以下二选一）
+# 1. tiny 模型（速度快，准确度适中）
+wget https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-tiny.tar.bz2
+tar xvf sherpa-onnx-whisper-tiny.tar.bz2 -C models/whisper/
+rm sherpa-onnx-whisper-tiny.tar.bz2
+
+# 2. base 模型（准确度更高，速度较慢）
+wget https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-base.tar.bz2
+tar xvf sherpa-onnx-whisper-base.tar.bz2 -C models/whisper/
+rm sherpa-onnx-whisper-base.tar.bz2
+
+# 下载 VAD 模型
+wget https://github.com/snakers4/silero-vad/raw/master/src/silero_vad/data/silero_vad.onnx -O models/silero_vad.onnx
+```
+
+注意：下载完成后，请确保在 `config.yaml` 中正确设置模型文件路径。
+
 ## 使用方法
 
 ### 列出可用音频源

@@ -30,6 +30,41 @@ cmake ..
 make
 ```
 
+## Model Download
+
+Before running the voice assistant, you need to download the required models:
+
+```bash
+# Create model directory
+mkdir -p models/whisper
+
+# Download Sense Voice model (choose one of the following)
+# 1. Standard model (more accurate, larger file)
+wget https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.onnx -O models/model.onnx
+
+# 2. Quantized model (faster, smaller file)
+wget https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.int8.onnx -O models/model.int8.onnx
+
+# Download Sense Voice tokens file
+wget https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt -O models/tokens.txt
+
+# Download Whisper model (choose one of the following)
+# 1. Tiny model (faster, moderate accuracy)
+wget https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-tiny.tar.bz2
+tar xvf sherpa-onnx-whisper-tiny.tar.bz2 -C models/whisper/
+rm sherpa-onnx-whisper-tiny.tar.bz2
+
+# 2. Base model (more accurate, slower)
+wget https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-base.tar.bz2
+tar xvf sherpa-onnx-whisper-base.tar.bz2 -C models/whisper/
+rm sherpa-onnx-whisper-base.tar.bz2
+
+# Download VAD model
+wget https://github.com/snakers4/silero-vad/raw/master/src/silero_vad/data/silero_vad.onnx -O models/silero_vad.onnx
+```
+
+Note: After downloading, make sure to update the model paths in your `config.yaml` accordingly.
+
 ## Usage
 
 ### List Available Audio Sources
