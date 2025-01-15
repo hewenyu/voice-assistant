@@ -55,6 +55,7 @@ jobs:
           -DSHERPA_ONNX_ENABLE_TESTS=OFF ^
           -DSHERPA_ONNX_ENABLE_CHECK=OFF ^
           -DCMAKE_INSTALL_PREFIX=install ^
+          -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL ^
           ..
         cmake --build . --config %BUILD_TYPE%
         cmake --install . --config %BUILD_TYPE%
@@ -69,6 +70,7 @@ jobs:
           -DCMAKE_BUILD_TYPE=%BUILD_TYPE% ^
           -DCMAKE_TOOLCHAIN_FILE=%GITHUB_WORKSPACE%\vcpkg\scripts\buildsystems\vcpkg.cmake ^
           -DCMAKE_PREFIX_PATH="%GITHUB_WORKSPACE%\vcpkg\installed\x64-windows;%GITHUB_WORKSPACE%\dep\sherpa-onnx\build\install" ^
+          -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL ^
           ..
 
     - name: Build
