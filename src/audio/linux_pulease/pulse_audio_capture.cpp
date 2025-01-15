@@ -265,94 +265,91 @@ void PulseAudioCapture::context_state_cb(pa_context* c, void* userdata) {
     }
 }
 
-void PulseAudioCapture::stream_state_cb(pa_stream* s, void* userdata) {
+void PulseAudioCapture::stream_state_cb(pa_stream* /*s*/, void* userdata) {
     auto *mainloop = static_cast<pa_threaded_mainloop*>(userdata);
-        pa_threaded_mainloop_signal(mainloop, 0);
+    pa_threaded_mainloop_signal(mainloop, 0);
 }
 
-void PulseAudioCapture::stream_read_cb(pa_stream* s, size_t length, void* userdata) {
-        // std::cout << "stream_read_cb called with length: " << length << std::endl;
-        auto *ac = static_cast<PulseAudioCapture*>(userdata);
-        const void *data;
-        size_t bytes;
-        
-        if (pa_stream_peek(s, &data, &bytes) < 0) {
-            std::cerr << "Failed to read from stream" << std::endl;
-            return;
+void PulseAudioCapture::stream_read_cb(pa_stream* s, size_t /*length*/, void* userdata) {
+    auto *ac = static_cast<PulseAudioCapture*>(userdata);
+    const void *data;
+    size_t bytes;
+    
+    if (pa_stream_peek(s, &data, &bytes) < 0) {
+        std::cerr << "Failed to read from stream" << std::endl;
+        return;
+    }
+    
+    if (!data) {
+        if (bytes > 0) {
+            std::cerr << "Got audio hole of " << bytes << " bytes" << std::endl;
         }
-        
-        // std::cout << "stream_peek returned bytes: " << bytes << ", data ptr: " << data << std::endl;
-        
-        if (!data) {
-            if (bytes > 0) {
-                std::cerr << "Got audio hole of " << bytes << " bytes" << std::endl;
-            }
-            pa_stream_drop(s);
-            return;
-        }
-        
-        if (bytes > 0 && ac->is_recording) {
-            // std::cout << "Processing " << bytes << " bytes of audio data" << std::endl;
-            // Convert audio data to the required format (16kHz, mono, S16LE)
-            const int16_t *samples = static_cast<const int16_t*>(data);
-            size_t num_samples = bytes / sizeof(int16_t);
-            
-            // std::cout << "Number of samples: " << num_samples << std::endl;
-            
-            // If stereo, convert to mono by averaging channels
-            if (ac->source_spec.channels == 2) {
-                // std::cout << "Converting stereo to mono" << std::endl;
-                for (size_t i = 0; i < num_samples; i += 2) {
-                    int32_t mono_sample = (static_cast<int32_t>(samples[i]) + 
-                                         static_cast<int32_t>(samples[i + 1])) / 2;
-                    ac->audio_buffer.push_back(static_cast<int16_t>(mono_sample));
-                }
-            } else {
-                std::cout << "Copying mono samples directly" << std::endl;
-                ac->audio_buffer.insert(ac->audio_buffer.end(), samples, samples + num_samples);
-            }
-            
-            // Resample if needed (simple linear resampling)
-            if (ac->source_spec.rate != SAMPLE_RATE) {
-                std::cout << "Resampling from " << ac->source_spec.rate << " to " << SAMPLE_RATE << std::endl;
-                std::vector<int16_t> resampled;
-                float ratio = static_cast<float>(SAMPLE_RATE) / ac->source_spec.rate;
-                size_t new_size = static_cast<size_t>(ac->audio_buffer.size() * ratio);
-                resampled.reserve(new_size);
-                
-                for (size_t i = 0; i < new_size; ++i) {
-                    float src_idx = i / ratio;
-                    size_t idx1 = static_cast<size_t>(src_idx);
-                    size_t idx2 = idx1 + 1;
-                    if (idx2 >= ac->audio_buffer.size()) idx2 = idx1;
-                    
-                    float frac = src_idx - idx1;
-                    int16_t sample = static_cast<int16_t>(
-                        ac->audio_buffer[idx1] * (1.0f - frac) + 
-                        ac->audio_buffer[idx2] * frac
-                    );
-                    resampled.push_back(sample);
-                }
-                
-                ac->audio_buffer = std::move(resampled);
-            }
-            
-            std::cout << "Final buffer size: " << ac->audio_buffer.size() << " samples" << std::endl;
-        
-            
-            if (ac->recognition_enabled_) {
-                    std::cout << "Processing audio for recognition" << std::endl;
-                    ac->process_audio_for_recognition(ac->audio_buffer);
-                }
-            
-            ac->audio_buffer.clear();  // Clear buffer after processing
-        }
-        
         pa_stream_drop(s);
+        return;
+    }
+    
+    if (bytes > 0 && ac->is_recording) {
+        // std::cout << "Processing " << bytes << " bytes of audio data" << std::endl;
+        // Convert audio data to the required format (16kHz, mono, S16LE)
+        const int16_t *samples = static_cast<const int16_t*>(data);
+        size_t num_samples = bytes / sizeof(int16_t);
+        
+        // std::cout << "Number of samples: " << num_samples << std::endl;
+        
+        // If stereo, convert to mono by averaging channels
+        if (ac->source_spec.channels == 2) {
+            // std::cout << "Converting stereo to mono" << std::endl;
+            for (size_t i = 0; i < num_samples; i += 2) {
+                int32_t mono_sample = (static_cast<int32_t>(samples[i]) + 
+                                     static_cast<int32_t>(samples[i + 1])) / 2;
+                ac->audio_buffer.push_back(static_cast<int16_t>(mono_sample));
+            }
+        } else {
+            std::cout << "Copying mono samples directly" << std::endl;
+            ac->audio_buffer.insert(ac->audio_buffer.end(), samples, samples + num_samples);
+        }
+        
+        // Resample if needed (simple linear resampling)
+        if (ac->source_spec.rate != SAMPLE_RATE) {
+            std::cout << "Resampling from " << ac->source_spec.rate << " to " << SAMPLE_RATE << std::endl;
+            std::vector<int16_t> resampled;
+            float ratio = static_cast<float>(SAMPLE_RATE) / ac->source_spec.rate;
+            size_t new_size = static_cast<size_t>(ac->audio_buffer.size() * ratio);
+            resampled.reserve(new_size);
+            
+            for (size_t i = 0; i < new_size; ++i) {
+                float src_idx = i / ratio;
+                size_t idx1 = static_cast<size_t>(src_idx);
+                size_t idx2 = idx1 + 1;
+                if (idx2 >= ac->audio_buffer.size()) idx2 = idx1;
+                
+                float frac = src_idx - idx1;
+                int16_t sample = static_cast<int16_t>(
+                    ac->audio_buffer[idx1] * (1.0f - frac) + 
+                    ac->audio_buffer[idx2] * frac
+                );
+                resampled.push_back(sample);
+            }
+            
+            ac->audio_buffer = std::move(resampled);
+        }
+        
+        // std::cout << "Final buffer size: " << ac->audio_buffer.size() << " samples" << std::endl;
+    
+        
+        if (ac->recognition_enabled_) {
+                // std::cout << "Processing audio for recognition" << std::endl;
+                ac->process_audio_for_recognition(ac->audio_buffer);
+            }
+        
+        ac->audio_buffer.clear();  // Clear buffer after processing
+    }
+    
+    pa_stream_drop(s);
 }
 
-void PulseAudioCapture::sink_input_info_cb(pa_context* c, const pa_sink_input_info* i,
-                                          int eol, void* userdata) {
+void PulseAudioCapture::sink_input_info_cb(pa_context* /*c*/, const pa_sink_input_info* i,
+                                        int eol, void* userdata) {
     if (!eol && i) {
         auto *ac = static_cast<PulseAudioCapture*>(userdata);
         
@@ -452,7 +449,7 @@ void PulseAudioCapture::list_applications() {
 }
 
 bool PulseAudioCapture::start_recording_application(uint32_t sink_input_index) {
-     std::cout << "Starting recording for sink input " << sink_input_index << std::endl;
+    std::cout << "Starting recording for sink input " << sink_input_index << std::endl;
             
     if (stream_) {
         throw std::runtime_error("Already recording");
@@ -503,7 +500,7 @@ bool PulseAudioCapture::start_recording_application(uint32_t sink_input_index) {
         pa_stream* stream;
     };
             
-    auto get_sink_cb = [](pa_context *c, const pa_sink_input_info *i, int eol, void *userdata) {
+    auto get_sink_cb = [](pa_context* /*c*/, const pa_sink_input_info* i, int eol, void* userdata) {
         std::cout << "Sink info callback called with eol: " << eol << std::endl;
         auto* data = static_cast<CallbackData*>(userdata);
         
@@ -568,6 +565,8 @@ bool PulseAudioCapture::start_recording_application(uint32_t sink_input_index) {
     // Clear any existing audio data
     audio_buffer.clear();
     std::cout << "Recording started" << std::endl;
+    
+    return true;  // Return success
 }
 
 void PulseAudioCapture::stop_recording() {
@@ -579,7 +578,6 @@ void PulseAudioCapture::stop_recording() {
         stream_ = nullptr;
         pa_threaded_mainloop_unlock(mainloop_);
     }
-     
 }
 
 } // namespace linux_pulse 

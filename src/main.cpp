@@ -133,6 +133,10 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
+        // Set up signal handler
+        signal(SIGINT, signal_handler);
+        signal(SIGTERM, signal_handler);
+
         // Start audio capture
         if (!audio_capture->start_recording_application(source_index)) {
             std::cerr << "Failed to start audio capture." << std::endl;
@@ -147,6 +151,7 @@ int main(int argc, char* argv[]) {
 
         // Cleanup
         audio_capture->stop_recording();
+        std::cout << "\nRecording stopped.\n";
 
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
