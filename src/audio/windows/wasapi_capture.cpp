@@ -1,84 +1,74 @@
 #include "wasapi_capture.h"
+#include <Functiondiscoverykeys_devpkey.h>
+#include <Audioclient.h>
+#include <audiopolicy.h>
+#include <mmdeviceapi.h>
 #include <iostream>
-#include <psapi.h>
+#include <iomanip>
+#include <thread>
 
-namespace windows_voice {
+#pragma comment(lib, "ole32.lib")
+#pragma comment(lib, "oleaut32.lib")
 
-// COM初始化器实现
-WasapiCapture::ComInitializer::ComInitializer() : initialized_(false) {
-    HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-    initialized_ = SUCCEEDED(hr);
-}
+namespace windows_wasapi {
 
-WasapiCapture::ComInitializer::~ComInitializer() {
-    if (initialized_) {
-        CoUninitialize();
-    }
-}
-
-WasapiCapture::WasapiCapture(const std::string& config_path)
+WasapiCapture::WasapiCapture()
     : device_enumerator_(nullptr)
-    , device_(nullptr)
+    , audio_device_(nullptr)
     , audio_client_(nullptr)
     , capture_client_(nullptr)
-    , session_manager_(nullptr)
-    , session_enumerator_(nullptr)
-    , is_recording_(false)
-    , should_stop_(false)
     , wave_format_(nullptr)
-    , current_session_(nullptr) {
+    , recognizer_(nullptr)
+    , recognition_stream_(nullptr)
+    , vad_(nullptr)
+    , translate_(nullptr)
+    , window_size_(0)
+    , recognition_enabled_(false)
+    , is_recording(false)
+    , capture_thread_handle_(nullptr)
+    , capture_thread_running_(false) {
     
-    // 设置默认音频格式
-    format_ = AudioFormat(16000, 1, 16);  // 16kHz, mono, 16-bit
+    // Set default audio format (same as PulseAudio implementation)
+    format_ = {16000, 1, 16};  // 16kHz, mono, 16-bit
+    
+    // Initialize COM
+    HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    if (FAILED(hr)) {
+        throw std::runtime_error("Failed to initialize COM");
+    }
 }
 
 WasapiCapture::~WasapiCapture() {
     cleanup();
+    CoUninitialize();
 }
 
 void WasapiCapture::cleanup() {
-    if (is_recording_) {
-        stop_recording();
-    }
-
-    if (wave_format_) {
-        CoTaskMemFree(wave_format_);
-        wave_format_ = nullptr;
-    }
-
+    stop_recording();
+    
     if (capture_client_) {
         capture_client_->Release();
         capture_client_ = nullptr;
     }
-
+    
     if (audio_client_) {
         audio_client_->Release();
         audio_client_ = nullptr;
     }
-
-    if (current_session_) {
-        current_session_->Release();
-        current_session_ = nullptr;
+    
+    if (audio_device_) {
+        audio_device_->Release();
+        audio_device_ = nullptr;
     }
-
-    if (session_enumerator_) {
-        session_enumerator_->Release();
-        session_enumerator_ = nullptr;
-    }
-
-    if (session_manager_) {
-        session_manager_->Release();
-        session_manager_ = nullptr;
-    }
-
-    if (device_) {
-        device_->Release();
-        device_ = nullptr;
-    }
-
+    
     if (device_enumerator_) {
         device_enumerator_->Release();
         device_enumerator_ = nullptr;
+    }
+    
+    if (wave_format_) {
+        CoTaskMemFree(wave_format_);
+        wave_format_ = nullptr;
     }
 }
 
@@ -90,304 +80,424 @@ bool WasapiCapture::initialize() {
         __uuidof(IMMDeviceEnumerator),
         (void**)&device_enumerator_
     );
-
+    
     if (FAILED(hr)) {
         std::cerr << "Failed to create device enumerator" << std::endl;
         return false;
     }
-
-    hr = device_enumerator_->GetDefaultAudioEndpoint(
-        eRender,  // 捕获渲染端点（扬声器）
-        eConsole, // 控制台设备
-        &device_
-    );
-
-    if (FAILED(hr)) {
-        std::cerr << "Failed to get default audio endpoint" << std::endl;
-        return false;
-    }
-
-    // 获取会话管理器
-    hr = device_->Activate(
-        __uuidof(IAudioSessionManager2),
-        CLSCTX_ALL,
-        nullptr,
-        (void**)&session_manager_
-    );
-
-    if (FAILED(hr)) {
-        std::cerr << "Failed to get session manager" << std::endl;
-        return false;
-    }
-
-    return enumerate_applications();
-}
-
-bool WasapiCapture::get_application_name(DWORD process_id, std::wstring& name) {
-    HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, process_id);
-    if (!process) {
-        return false;
-    }
-
-    WCHAR path[MAX_PATH];
-    DWORD size = MAX_PATH;
-    if (!QueryFullProcessImageNameW(process, 0, path, &size)) {
-        CloseHandle(process);
-        return false;
-    }
-
-    WCHAR* filename = wcsrchr(path, L'\\');
-    if (filename) {
-        name = filename + 1;
-    } else {
-        name = path;
-    }
-
-    CloseHandle(process);
+    
     return true;
 }
 
-bool WasapiCapture::enumerate_applications() {
-    available_sessions_.clear();
-
-    // 获取会话枚举器
-    HRESULT hr = session_manager_->GetSessionEnumerator(&session_enumerator_);
-    if (FAILED(hr)) {
-        std::cerr << "Failed to get session enumerator" << std::endl;
-        return false;
-    }
-
-    int session_count;
-    hr = session_enumerator_->GetCount(&session_count);
-    if (FAILED(hr)) {
-        std::cerr << "Failed to get session count" << std::endl;
-        return false;
-    }
-
-    // 添加系统音频作为ID 0
-    AudioSessionInfo system_audio;
-    system_audio.name = L"System Audio";
-    system_audio.identifier = L"system";
-    system_audio.process_id = 0;
-    available_sessions_[0] = system_audio;
-
-    // 枚举所有音频会话
-    for (int i = 0; i < session_count; i++) {
-        IAudioSessionControl* session_control = nullptr;
-        hr = session_enumerator_->GetSession(i, &session_control);
-        if (FAILED(hr)) continue;
-
-        IAudioSessionControl2* session_control2 = nullptr;
-        hr = session_control->QueryInterface(__uuidof(IAudioSessionControl2), (void**)&session_control2);
-        session_control->Release();
-        if (FAILED(hr)) continue;
-
-        DWORD process_id;
-        hr = session_control2->GetProcessId(&process_id);
-        if (SUCCEEDED(hr) && process_id != 0) {
-            AudioSessionInfo session;
-            session.process_id = process_id;
-            session.control = session_control2;
-
-            // 获取会话标识符
-            LPWSTR session_id;
-            hr = session_control2->GetSessionInstanceIdentifier(&session_id);
-            if (SUCCEEDED(hr)) {
-                session.identifier = session_id;
-                CoTaskMemFree(session_id);
-            }
-
-            // 获取应用程序名称
-            if (get_application_name(process_id, session.name)) {
-                available_sessions_[process_id] = std::move(session);
-            } else {
-                session_control2->Release();
-            }
-        } else {
-            session_control2->Release();
+void WasapiCapture::set_model_recognizer(const SherpaOnnxOfflineRecognizer* recognizer) {
+    try {
+        if (!vad_) {
+            std::cerr << "[ERROR] VAD is not initialized" << std::endl;
+            throw std::runtime_error("VAD is not initialized");
         }
+        
+        recognizer_ = recognizer;
+        if (!recognizer_) {
+            std::cerr << "[ERROR] Recognizer is not initialized" << std::endl;
+            throw std::runtime_error("Recognizer is not initialized");
+        }
+        
+        recognition_stream_ = SherpaOnnxCreateOfflineStream(recognizer_);
+        if (!recognition_stream_) {
+            std::cerr << "[ERROR] Failed to create recognition stream" << std::endl;
+            throw std::runtime_error("Failed to create recognition stream");
+        }
+        
+        recognition_enabled_ = true;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Error setting model recognizer: " << e.what() << std::endl;
+        throw;
+    }
+}
+
+void WasapiCapture::set_model_vad(SherpaOnnxVoiceActivityDetector* vad, const int window_size) {
+    vad_ = vad;
+    window_size_ = window_size;
+}
+
+void WasapiCapture::set_translate(const translator::ITranslator* translate) {
+    translate_ = translate;
+}
+
+void WasapiCapture::process_audio_for_recognition(const std::vector<int16_t>& audio_data) {
+    if (!recognition_enabled_ || !vad_) {
+        return;
+    }
+    
+    std::lock_guard<std::mutex> lock(recognition_mutex_);
+    
+    // Convert to float samples
+    std::vector<float> float_samples(audio_data.size());
+    for (size_t i = 0; i < audio_data.size(); ++i) {
+        float_samples[i] = audio_data[i] / 32768.0f;
     }
 
-    return true;
+    // If we have remaining samples from last batch, prepend them
+    if (!remaining_samples_.empty()) {
+        float_samples.insert(float_samples.begin(),
+                           remaining_samples_.begin(),
+                           remaining_samples_.end());
+        remaining_samples_.clear();
+    }
+
+    const int window_size = window_size_;
+    size_t i = 0;
+    while (i + window_size <= float_samples.size()) {
+        // Feed window_size samples to VAD
+        SherpaOnnxVoiceActivityDetectorAcceptWaveform(
+            vad_,
+            float_samples.data() + i,
+            window_size
+        );
+        
+        // Process any complete speech segments
+        while (!SherpaOnnxVoiceActivityDetectorEmpty(vad_)) {
+            const SherpaOnnxSpeechSegment* segment = 
+                    SherpaOnnxVoiceActivityDetectorFront(vad_);
+            if (segment) {
+                // Create a new stream for this segment
+                const SherpaOnnxOfflineStream* stream = 
+                    SherpaOnnxCreateOfflineStream(recognizer_);
+
+                if (stream) {
+                    // Process the speech segment
+                    SherpaOnnxAcceptWaveformOffline(
+                        stream,
+                        format_.sample_rate,
+                        segment->samples,
+                        segment->n
+                    );
+
+                    SherpaOnnxDecodeOfflineStream(recognizer_, stream);
+
+                    const SherpaOnnxOfflineRecognizerResult* result = 
+                        SherpaOnnxGetOfflineStreamResult(stream);
+
+                    if (result && result->text) {
+                        float start = segment->start / static_cast<float>(format_.sample_rate);
+                        float duration = segment->n / static_cast<float>(format_.sample_rate);
+                        float end = start + duration;
+
+                        std::cout << "\n[Recognition Result]" << std::endl;
+                        std::cout << "Time: " << std::fixed << std::setprecision(3)
+                                  << start << "s -- " << end << "s" << std::endl;
+                        std::cout << "Text: " << result->text << std::endl;
+
+                        if (result->lang) {
+                            std::string language_code = std::string(result->lang).substr(2, 2);
+                            std::transform(language_code.begin(), language_code.end(), 
+                                         language_code.begin(), ::toupper);
+                            std::cout << "Language Code: " << language_code << std::endl;
+
+                            std::string target_lang = translate_->get_target_language();
+                            std::transform(target_lang.begin(), target_lang.end(), 
+                                         target_lang.begin(), ::toupper);
+                            std::cout << "Target Language: " << target_lang << std::endl;
+                            
+                            if (target_lang != language_code) {
+                                try {
+                                    std::string translated_text = 
+                                        translate_->translate(result->text, language_code);
+                                    std::cout << "Translated Text: " << translated_text << std::endl;
+                                } catch (const std::exception& e) {
+                                    std::cerr << "Error translating text: " << e.what() << std::endl;
+                                }
+                            }
+                        }
+                        std::cout << std::string(50, '-') << std::endl;
+                    }
+
+                    // Clean up
+                    SherpaOnnxDestroyOfflineRecognizerResult(result);
+                    SherpaOnnxDestroyOfflineStream(stream);
+                }
+
+                SherpaOnnxDestroySpeechSegment(segment);
+            }
+            SherpaOnnxVoiceActivityDetectorPop(vad_);
+        }
+        i += window_size;
+    }
+
+    // Store remaining samples for next batch
+    if (i < float_samples.size()) {
+        remaining_samples_.assign(
+            float_samples.begin() + i,
+            float_samples.end()
+        );
+    }
 }
 
 void WasapiCapture::list_applications() {
-    enumerate_applications();
-    std::cout << "Available audio sources:" << std::endl;
-    for (const auto& session : available_sessions_) {
-        std::wcout << "ID: " << session.first 
-                  << ", Name: " << session.second.name 
-                  << std::endl;
-    }
-}
-
-bool WasapiCapture::setup_session_capture(const AudioSessionInfo& session) {
-    HRESULT hr;
-
-    // 如果是系统音频
-    if (session.process_id == 0) {
-        hr = device_->Activate(
-            __uuidof(IAudioClient),
-            CLSCTX_ALL,
-            nullptr,
-            (void**)&audio_client_
-        );
-    } else {
-        // 获取会话音频客户端
-        IAudioSessionControl2* control = session.control;
-        if (!control) return false;
-
-        hr = device_->Activate(
-            __uuidof(IAudioClient),
-            CLSCTX_ALL,
-            nullptr,
-            (void**)&audio_client_
-        );
-    }
-
+    available_applications_.clear();
+    
+    // Get the default audio endpoint
+    IMMDevice* default_device = nullptr;
+    HRESULT hr = device_enumerator_->GetDefaultAudioEndpoint(eRender, eConsole, &default_device);
     if (FAILED(hr)) {
-        std::cerr << "Failed to activate audio client" << std::endl;
-        return false;
-    }
-
-    hr = audio_client_->GetMixFormat(&wave_format_);
-    if (FAILED(hr)) {
-        std::cerr << "Failed to get mix format" << std::endl;
-        return false;
-    }
-
-    // 配置音频客户端
-    REFERENCE_TIME requested_duration = 10000000;  // 1秒 = 10,000,000 百纳秒
-    hr = audio_client_->Initialize(
-        AUDCLNT_SHAREMODE_SHARED,
-        session.process_id == 0 ? AUDCLNT_STREAMFLAGS_LOOPBACK : 0,
-        requested_duration,
-        0,
-        wave_format_,
-        nullptr
-    );
-
-    if (FAILED(hr)) {
-        std::cerr << "Failed to initialize audio client" << std::endl;
-        return false;
-    }
-
-    hr = audio_client_->GetService(
-        __uuidof(IAudioCaptureClient),
-        (void**)&capture_client_
-    );
-
-    if (FAILED(hr)) {
-        std::cerr << "Failed to get capture client" << std::endl;
-        return false;
-    }
-
-    return true;
-}
-
-bool WasapiCapture::start_recording_application(uint32_t app_id,
-                                              const std::string& output_path) {
-    if (is_recording_) {
-        std::cerr << "Already recording" << std::endl;
-        return false;
-    }
-
-    auto it = available_sessions_.find(app_id);
-    if (it == available_sessions_.end()) {
-        std::cerr << "Application ID not found" << std::endl;
-        return false;
-    }
-
-    if (!setup_session_capture(it->second)) {
-        std::cerr << "Failed to setup session capture" << std::endl;
-        return false;
-    }
-
-    if (!output_path.empty()) {
-        wav_writer_ = std::make_unique<WavWriter>();
-        AudioFormat output_format(
-            wave_format_->nSamplesPerSec,
-            wave_format_->nChannels,
-            wave_format_->wBitsPerSample
-        );
-        
-        if (!wav_writer_->open(output_path, output_format)) {
-            std::cerr << "Failed to open output file" << std::endl;
-            return false;
-        }
-    }
-
-    should_stop_ = false;
-    is_recording_ = true;
-    capture_thread_ = std::thread(&WasapiCapture::capture_thread_proc, this);
-
-    return true;
-}
-
-void WasapiCapture::capture_thread_proc() {
-    HRESULT hr = audio_client_->Start();
-    if (FAILED(hr)) {
-        std::cerr << "Failed to start audio client" << std::endl;
+        std::cerr << "Failed to get default audio endpoint" << std::endl;
         return;
     }
+    
+    // Activate the IAudioSessionManager2 interface
+    IAudioSessionManager2* session_manager = nullptr;
+    hr = default_device->Activate(__uuidof(IAudioSessionManager2), CLSCTX_ALL, 
+                                nullptr, (void**)&session_manager);
+    default_device->Release();
+    
+    if (FAILED(hr)) {
+        std::cerr << "Failed to get audio session manager" << std::endl;
+        return;
+    }
+    
+    // Get the session enumerator
+    IAudioSessionEnumerator* session_enumerator = nullptr;
+    hr = session_manager->GetSessionEnumerator(&session_enumerator);
+    session_manager->Release();
+    
+    if (FAILED(hr)) {
+        std::cerr << "Failed to get session enumerator" << std::endl;
+        return;
+    }
+    
+    // Enumerate all sessions
+    int session_count;
+    hr = session_enumerator->GetCount(&session_count);
+    if (SUCCEEDED(hr)) {
+        for (int i = 0; i < session_count; i++) {
+            IAudioSessionControl* session_control = nullptr;
+            hr = session_enumerator->GetSession(i, &session_control);
+            
+            if (SUCCEEDED(hr)) {
+                IAudioSessionControl2* session_control2 = nullptr;
+                hr = session_control->QueryInterface(__uuidof(IAudioSessionControl2), 
+                                                   (void**)&session_control2);
+                session_control->Release();
+                
+                if (SUCCEEDED(hr)) {
+                    DWORD process_id;
+                    hr = session_control2->GetProcessId(&process_id);
+                    
+                    if (SUCCEEDED(hr) && process_id != 0) {
+                        HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 
+                                                   FALSE, process_id);
+                        if (process) {
+                            wchar_t process_name[MAX_PATH];
+                            DWORD size = MAX_PATH;
+                            
+                            if (QueryFullProcessImageNameW(process, 0, process_name, &size)) {
+                                std::wstring ws(process_name);
+                                std::string process_name_str(ws.begin(), ws.end());
+                                size_t last_slash = process_name_str.find_last_of("\\");
+                                if (last_slash != std::string::npos) {
+                                    process_name_str = process_name_str.substr(last_slash + 1);
+                                }
+                                
+                                available_applications_[process_id] = process_name_str;
+                                std::cout << "  " << process_id << ": " 
+                                          << process_name_str << std::endl;
+                            }
+                            CloseHandle(process);
+                        }
+                    }
+                    session_control2->Release();
+                }
+            }
+        }
+    }
+    session_enumerator->Release();
+}
 
-    while (!should_stop_) {
-        UINT32 packet_length = 0;
-        BYTE* data;
-        DWORD flags;
-
-        hr = capture_client_->GetNextPacketSize(&packet_length);
+DWORD WINAPI WasapiCapture::capture_thread(LPVOID param) {
+    auto* capture = static_cast<WasapiCapture*>(param);
+    UINT32 packet_length = 0;
+    BYTE* data;
+    UINT32 num_frames_available;
+    DWORD flags;
+    
+    while (capture->capture_thread_running_) {
+        HRESULT hr = capture->capture_client_->GetNextPacketSize(&packet_length);
         if (FAILED(hr)) {
             std::cerr << "Failed to get next packet size" << std::endl;
             break;
         }
-
-        if (packet_length == 0) {
-            Sleep(10);  // 没有数据时等待一会
-            continue;
-        }
-
-        hr = capture_client_->GetBuffer(
-            &data,
-            &packet_length,
-            &flags,
-            nullptr,
-            nullptr
-        );
-
-        if (FAILED(hr)) {
-            std::cerr << "Failed to get buffer" << std::endl;
-            break;
-        }
-
-        if (!(flags & AUDCLNT_BUFFERFLAGS_SILENT) && wav_writer_) {
-            wav_writer_->write(data, packet_length * wave_format_->nBlockAlign);
-        }
-
-        hr = capture_client_->ReleaseBuffer(packet_length);
-        if (FAILED(hr)) {
-            std::cerr << "Failed to release buffer" << std::endl;
-            break;
+        
+        while (packet_length > 0) {
+            hr = capture->capture_client_->GetBuffer(&data, &num_frames_available, &flags, nullptr, nullptr);
+            if (FAILED(hr)) {
+                std::cerr << "Failed to get buffer" << std::endl;
+                break;
+            }
+            
+            if (!(flags & AUDCLNT_BUFFERFLAGS_SILENT)) {
+                // Process the audio data
+                const int16_t* samples = reinterpret_cast<const int16_t*>(data);
+                size_t num_samples = num_frames_available * capture->wave_format_->nChannels;
+                
+                std::vector<int16_t> mono_samples;
+                mono_samples.reserve(num_frames_available);
+                
+                // Convert to mono if necessary
+                if (capture->wave_format_->nChannels == 2) {
+                    for (size_t i = 0; i < num_samples; i += 2) {
+                        int32_t mono_sample = (static_cast<int32_t>(samples[i]) + 
+                                             static_cast<int32_t>(samples[i + 1])) / 2;
+                        mono_samples.push_back(static_cast<int16_t>(mono_sample));
+                    }
+                } else {
+                    mono_samples.assign(samples, samples + num_samples);
+                }
+                
+                // Resample if necessary
+                if (capture->wave_format_->nSamplesPerSec != capture->format_.sample_rate) {
+                    std::vector<int16_t> resampled;
+                    float ratio = static_cast<float>(capture->format_.sample_rate) / 
+                                capture->wave_format_->nSamplesPerSec;
+                    size_t new_size = static_cast<size_t>(mono_samples.size() * ratio);
+                    resampled.reserve(new_size);
+                    
+                    for (size_t i = 0; i < new_size; ++i) {
+                        float src_idx = i / ratio;
+                        size_t idx1 = static_cast<size_t>(src_idx);
+                        size_t idx2 = idx1 + 1;
+                        if (idx2 >= mono_samples.size()) idx2 = idx1;
+                        
+                        float frac = src_idx - idx1;
+                        int16_t sample = static_cast<int16_t>(
+                            mono_samples[idx1] * (1.0f - frac) + 
+                            mono_samples[idx2] * frac
+                        );
+                        resampled.push_back(sample);
+                    }
+                    
+                    if (capture->recognition_enabled_) {
+                        capture->process_audio_for_recognition(resampled);
+                    }
+                } else {
+                    if (capture->recognition_enabled_) {
+                        capture->process_audio_for_recognition(mono_samples);
+                    }
+                }
+            }
+            
+            hr = capture->capture_client_->ReleaseBuffer(num_frames_available);
+            if (FAILED(hr)) {
+                std::cerr << "Failed to release buffer" << std::endl;
+                break;
+            }
+            
+            hr = capture->capture_client_->GetNextPacketSize(&packet_length);
+            if (FAILED(hr)) {
+                std::cerr << "Failed to get next packet size" << std::endl;
+                break;
+            }
         }
     }
+    
+    return 0;
+}
 
-    audio_client_->Stop();
+bool WasapiCapture::start_recording_application(unsigned int pid) {
+    if (is_recording) {
+        std::cerr << "Already recording" << std::endl;
+        return false;
+    }
+    
+    // Get the default audio endpoint
+    IMMDevice* default_device = nullptr;
+    HRESULT hr = device_enumerator_->GetDefaultAudioEndpoint(eRender, eConsole, &default_device);
+    if (FAILED(hr)) {
+        std::cerr << "Failed to get default audio endpoint" << std::endl;
+        return false;
+    }
+    
+    // Activate the audio client
+    hr = default_device->Activate(__uuidof(IAudioClient), CLSCTX_ALL, 
+                                nullptr, (void**)&audio_client_);
+    default_device->Release();
+    
+    if (FAILED(hr)) {
+        std::cerr << "Failed to activate audio client" << std::endl;
+        return false;
+    }
+    
+    // Get the mix format
+    hr = audio_client_->GetMixFormat(&wave_format_);
+    if (FAILED(hr)) {
+        std::cerr << "Failed to get mix format" << std::endl;
+        cleanup();
+        return false;
+    }
+    
+    // Initialize the audio client
+    hr = audio_client_->Initialize(
+        AUDCLNT_SHAREMODE_SHARED,
+        AUDCLNT_STREAMFLAGS_LOOPBACK,
+        0,
+        0,
+        wave_format_,
+        nullptr
+    );
+    
+    if (FAILED(hr)) {
+        std::cerr << "Failed to initialize audio client" << std::endl;
+        cleanup();
+        return false;
+    }
+    
+    // Get the capture client
+    hr = audio_client_->GetService(__uuidof(IAudioCaptureClient), (void**)&capture_client_);
+    if (FAILED(hr)) {
+        std::cerr << "Failed to get capture client" << std::endl;
+        cleanup();
+        return false;
+    }
+    
+    // Start the audio client
+    hr = audio_client_->Start();
+    if (FAILED(hr)) {
+        std::cerr << "Failed to start audio client" << std::endl;
+        cleanup();
+        return false;
+    }
+    
+    // Start the capture thread
+    capture_thread_running_ = true;
+    capture_thread_handle_ = CreateThread(nullptr, 0, capture_thread, this, 0, nullptr);
+    if (!capture_thread_handle_) {
+        std::cerr << "Failed to create capture thread" << std::endl;
+        cleanup();
+        return false;
+    }
+    
+    is_recording = true;
+    return true;
 }
 
 void WasapiCapture::stop_recording() {
-    if (!is_recording_) return;
-
-    should_stop_ = true;
-    if (capture_thread_.joinable()) {
-        capture_thread_.join();
+    if (!is_recording) {
+        return;
     }
-
-    is_recording_ = false;
-
-    if (wav_writer_) {
-        wav_writer_->close();
-        wav_writer_.reset();
+    
+    capture_thread_running_ = false;
+    if (capture_thread_handle_) {
+        WaitForSingleObject(capture_thread_handle_, INFINITE);
+        CloseHandle(capture_thread_handle_);
+        capture_thread_handle_ = nullptr;
     }
+    
+    if (audio_client_) {
+        audio_client_->Stop();
+    }
+    
+    cleanup();
+    is_recording = false;
 }
 
-} // namespace voice 
+} // namespace windows_wasapi 
