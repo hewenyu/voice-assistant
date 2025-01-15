@@ -27,6 +27,7 @@ jobs:
         apt-get install -y protobuf-compiler libprotobuf-dev
         apt-get install -y libgrpc++-dev libgrpc-dev protobuf-compiler-grpc
         apt-get install -y libpulse-dev pulseaudio
+        apt-get install -y nlohmann-json3-dev
 
     - name: Build sherpa-onnx
       run: |
