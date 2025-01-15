@@ -1,20 +1,33 @@
 # Collect source files
+set(COMMON_SOURCES
+    "audio/audio_capture.cpp"
+    "translator/translator.cpp"
+    "translator/deepl/deeplx_translator.cpp"
+    "main.cpp"
+)
+
 if(WIN32)
-    file(GLOB_RECURSE SOURCES
-        "*.cpp"
-        "*.h"
+    set(PLATFORM_SOURCES
+        "audio/windows/wasapi_capture.cpp"
     )
-    list(FILTER SOURCES EXCLUDE REGEX ".*linux_pulease/.*")
+    
+    # Find Windows SDK path
+    if(DEFINED ENV{WindowsSdkDir} AND DEFINED ENV{WindowsSDKVersion})
+        set(WINDOWS_SDK_INCLUDE_DIRS
+            "$ENV{WindowsSdkDir}Include/$ENV{WindowsSDKVersion}um"
+            "$ENV{WindowsSdkDir}Include/$ENV{WindowsSDKVersion}shared"
+        )
+    else()
+        message(FATAL_ERROR "Windows SDK not found. Please install Windows SDK or set WindowsSdkDir and WindowsSDKVersion environment variables.")
+    endif()
 else()
-    file(GLOB_RECURSE SOURCES
-        "*.cpp"
-        "*.h"
+    set(PLATFORM_SOURCES
+        "audio/linux_pulease/pulse_audio_capture.cpp"
     )
-    list(FILTER SOURCES EXCLUDE REGEX ".*windows/.*")
 endif()
 
 # Create executable
-add_executable(voice_assistant ${SOURCES})
+add_executable(voice_assistant ${COMMON_SOURCES} ${PLATFORM_SOURCES})
 
 # Set include directories
 target_include_directories(voice_assistant
@@ -28,6 +41,10 @@ target_include_directories(voice_assistant
 
 # Platform specific dependencies
 if(WIN32)
+    # Add Windows SDK include paths
+    target_include_directories(voice_assistant PRIVATE ${WINDOWS_SDK_INCLUDE_DIRS})
+    
+    # Add Windows specific libraries
     target_link_libraries(voice_assistant
         PRIVATE
         ${CMAKE_THREAD_LIBS_INIT}

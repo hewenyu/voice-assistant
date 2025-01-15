@@ -2,9 +2,15 @@
 
 #include <audio/audio_capture.h>
 #include <audio/audio_format.h>
+
+// Windows SDK includes
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <audioclient.h>
 #include <mmdeviceapi.h>
+#include <functiondiscoverykeys_devpkey.h>
+
+// STL includes
 #include <vector>
 #include <map>
 #include <mutex>
