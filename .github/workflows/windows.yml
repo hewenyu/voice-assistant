@@ -23,6 +23,14 @@ jobs:
       run: |
         git submodule update --init --recursive
 
+    - name: Setup Windows SDK
+      shell: powershell
+      run: |
+        $WindowsSDKVersion = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Microsoft SDKs\Windows\v10.0').ProductVersion
+        $WindowsSDKDir = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Microsoft SDKs\Windows\v10.0').InstallationFolder
+        echo "WindowsSDKVersion=$WindowsSDKVersion.0" >> $env:GITHUB_ENV
+        echo "WindowsSdkDir=$WindowsSDKDir" >> $env:GITHUB_ENV
+
     - name: Install vcpkg
       run: |
         git clone https://github.com/Microsoft/vcpkg.git
