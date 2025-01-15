@@ -95,44 +95,36 @@ int main(int argc, char* argv[]) {
     }
 
     try {
-        std::cout << "[DEBUG] Loading model configuration from: " << model_config_path << std::endl;
         
         // Load model configuration
         common::ModelConfig model_config;
         if (!model_config_path.empty()) {
             model_config = common::ModelConfig::LoadFromFile(model_config_path);
-            std::cout << "[DEBUG] Model configuration loaded successfully" << std::endl;
         } else if (!list_sources) {
             std::cerr << "Model configuration is required for speech recognition." << std::endl;
             return 1;
         }
 
         // Create audio capture instance
-        std::cout << "[DEBUG] Creating audio capture instance..." << std::endl;
         auto audio_capture = audio::IAudioCapture::CreateAudioCapture();
         if (!audio_capture) {
             std::cerr << "Failed to create audio capture instance." << std::endl;
             return 1;
         }
-        std::cout << "[DEBUG] Audio capture instance created successfully" << std::endl;
 
         if (!audio_capture->initialize()) {
             std::cerr << "Failed to initialize audio capture." << std::endl;
             return 1;
         }
-        std::cout << "[DEBUG] Audio capture initialized successfully" << std::endl;
 
         // create recognizer
-        std::cout << "[DEBUG] Creating speech recognizer..." << std::endl;
         auto recognizer = recognizer::ModelFactory::CreateModel(model_config);
         if (!recognizer) {
             std::cerr << "Failed to create speech recognizer." << std::endl;
             return 1;
         }
-        std::cout << "[DEBUG] Speech recognizer created successfully" << std::endl;
 
         // create VAD
-        std::cout << "[DEBUG] Creating VAD..." << std::endl;
         auto vad = recognizer::ModelFactory::CreateVoiceActivityDetector(model_config);
         if (!vad) {
             std::cerr << "Failed to create VAD." << std::endl;
@@ -164,7 +156,6 @@ int main(int argc, char* argv[]) {
         signal(SIGTERM, signal_handler);
 
         // Start audio capture
-        std::cout << "[DEBUG] Starting audio capture for source index: " << source_index << std::endl;
         if (!audio_capture->start_recording_application(source_index)) {
             std::cerr << "Failed to start audio capture." << std::endl;
             return 1;
