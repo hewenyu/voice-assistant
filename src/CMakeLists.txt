@@ -104,7 +104,7 @@ install(TARGETS voice_assistant
 
 # 安装配置文件
 install(FILES 
-    "${CMAKE_CURRENT_SOURCE_DIR}/../config/config.yaml.example"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../config/config.yaml.template"
     DESTINATION etc/voice_assistant
     RENAME config.yaml
 )

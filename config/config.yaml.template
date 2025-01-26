@@ -6,7 +6,7 @@ debug: false
 # Model configuration
 model:
   # Specify the model type to use: "sense_voice" or "whisper"
-  type: "whisper"  
+  type: "sense_voice"  
 
   # SenseVoice model configuration
   sense_voice:
@@ -46,6 +46,7 @@ vad:
 # 翻译配置
 deeplx:
   enabled: true
-  url: http://localhost:1188/translate
-  token: your_access_token
+  url: "http://localhost:1188/translate"
+  token: "your_access_token"
   target_lang: ZH
+
