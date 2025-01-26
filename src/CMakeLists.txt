@@ -99,22 +99,26 @@ endif()
 
 # 安装配置
 install(TARGETS voice_assistant
-    RUNTIME DESTINATION bin
+    RUNTIME DESTINATION .
 )
 
 if(WIN32)
+    # 输出信息
+    message(STATUS "Install DLL from ${CMAKE_BINARY_DIR}")
     # 安装DLL依赖
-    file(GLOB DLL_FILES "${CMAKE_BINARY_DIR}/bin/*.dll")
+    file(GLOB DLL_FILES 
+        "${CMAKE_BINARY_DIR}/bin/*.dll"
+        "${CMAKE_BINARY_DIR}/src/*.dll"
+    )
     install(FILES ${DLL_FILES}
-        DESTINATION bin
+        DESTINATION .
     )
 endif()
-
 
 # 安装配置文件
 install(FILES 
     "${CMAKE_CURRENT_SOURCE_DIR}/../config/config.yaml.template"
-    DESTINATION etc/voice_assistant
+    DESTINATION config
     RENAME config.yaml
 )
 
