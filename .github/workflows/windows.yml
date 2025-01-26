@@ -59,9 +59,7 @@ jobs:
         shell: msys2 {0}
         run: |
           cd build
-          cmake --install . --prefix install --config ${{ matrix.build }}
-          cd install
-          7z a ../voice-assistant-${{ matrix.build }}.zip ./*
+          cpack -G ZIP -C ${{ matrix.build }}
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
