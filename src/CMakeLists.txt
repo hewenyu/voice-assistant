@@ -112,7 +112,8 @@ else()
         PUBLIC
         sherpa-onnx-c-api
         ${YAML_CPP_LIBRARIES}
-        ${PULSEAUDIO_LIBRARIES}
+        pulse
+        pulse-simple
     )
 endif()
 
