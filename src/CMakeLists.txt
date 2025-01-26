@@ -93,29 +93,6 @@ if(WIN32)
         ksuser
         avrt
     )
-
-    # 复制运行时依赖
-    set(RUNTIME_DEPS
-        "${CMAKE_BINARY_DIR}/bin/libaudio_capture.dll"
-        "${MSYS64_ROOT}/ucrt64/bin/libyaml-cpp.dll"
-        "${SHERPA_ONNX_LIB_DIR}/sherpa-onnx-c-api.dll"
-        "${SHERPA_ONNX_LIB_DIR}/sherpa-onnx-cxx-api.dll"
-        "${SHERPA_ONNX_LIB_DIR}/cargs.dll"
-        "${SHERPA_ONNX_LIB_DIR}/onnxruntime.dll"
-        "${SHERPA_ONNX_LIB_DIR}/onnxruntime_providers_shared.dll"
-        "${MSYS64_ROOT}/ucrt64/bin/libgcc_s_seh-1.dll"
-        "${MSYS64_ROOT}/ucrt64/bin/libstdc++-6.dll"
-        "${MSYS64_ROOT}/ucrt64/bin/libwinpthread-1.dll"
-    )
-
-    foreach(DEP ${RUNTIME_DEPS})
-        add_custom_command(TARGET voice_assistant POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${DEP}
-                $<TARGET_FILE_DIR:voice_assistant>
-        )
-    endforeach()
-
 else()
     # Linux 特定链接
     target_link_libraries(voice_assistant
@@ -150,8 +127,8 @@ set_target_properties(audio_capture PROPERTIES
 # 安装配置
 install(TARGETS voice_assistant audio_capture
     RUNTIME DESTINATION bin
-    LIBRARY DESTINATION lib
-    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION bin
+    ARCHIVE DESTINATION bin
 )
 
 # 安装配置文件
