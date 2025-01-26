@@ -93,3 +93,8 @@ else()
         $<TARGET_FILE:test_audio_capture>
     )
 endif() 
+
+# 设置测试属性
+set_tests_properties(test_audio_capture PROPERTIES
+    ENVIRONMENT "VOICE_ASSISTANT_TEST=1"
+)

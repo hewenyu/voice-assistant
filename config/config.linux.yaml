@@ -1,0 +1,43 @@
+provider: "cpu"
+num_threads: 4
+debug: false
+
+model:
+  type: "sense_voice"  # or "whisper"
+  sense_voice:
+    model_path: "/usr/share/voice-assistant/models/model.onnx"
+    tokens_path: "/usr/share/voice-assistant/models/tokens.txt"
+    language: "auto"  # Supports "zh", "en", "ja", "ko", "yue", etc.
+    decoding_method: "greedy_search"
+    use_itn: true
+  whisper:
+    encoder_path: "/usr/share/voice-assistant/models/whisper/encoder.onnx"
+    decoder_path: "/usr/share/voice-assistant/models/whisper/decoder.onnx"
+    tokens_path: "/usr/share/voice-assistant/models/whisper/tokens.txt"
+    language: "auto"
+
+vad:
+  model_path: "/usr/share/voice-assistant/models/silero_vad.onnx"
+  threshold: 0.5  # Voice detection threshold (0.0-1.0)
+  min_silence_duration: 0.5  # Minimum silence duration (seconds)
+  min_speech_duration: 0.25  # Minimum speech segment duration (seconds)
+  max_speech_duration: 30.0  # Maximum speech segment duration (seconds)
+  window_size: 512  # Processing window size (samples)
+  sample_rate: 16000  # Sample rate (Hz)
+  num_threads: 1  # VAD processing threads
+  debug: false  # Enable debug output
+
+audio:
+  pulseaudio:
+    sample_rate: 16000
+    channels: 1
+    bits_per_sample: 16
+    buffer_size: 2048
+    latency_ms: 20
+
+translator:
+  type: "deeplx"  # Translation service type
+  target_language: "zh"  # Target language for translation
+  deeplx:
+    url: "http://localhost:1188/translate"
+    token: ""  # Optional access token 

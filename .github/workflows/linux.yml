@@ -1,12 +1,12 @@
 name: Linux Build
 
 on:
-  # push:
-  #   branches:
-  #     - master
-  # pull_request:
-  #   branches:
-  #     - master
+  push:
+    branches:
+      - devwin
+  pull_request:
+    branches:
+      - devwin
   workflow_call:
 
 jobs:
@@ -67,7 +67,7 @@ jobs:
         mkdir build && cd build
         cmake -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_PREFIX_PATH="/usr/lib/x86_64-linux-gnu/cmake;${{github.workspace}}/dep/sherpa-onnx/build/install" \
+          -DCMAKE_PREFIX_PATH="/usr/lib/x86_64-linux-gnu/cmake" \
           ..
 
     - name: Build
@@ -106,3 +106,4 @@ jobs:
       with:
         name: voice-assistant-linux-x64
         path: voice-assistant-linux-x64.tar.gz 
+        retention-days: 3

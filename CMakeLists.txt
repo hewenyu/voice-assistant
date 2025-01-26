@@ -4,15 +4,21 @@ project(voice_assistant VERSION 1.0.0 LANGUAGES CXX)
 # 启用测试
 enable_testing()
 
+# 设置全局变量
+set(VOICE_ASSISTANT_VERSION ${PROJECT_VERSION})
+set(VOICE_ASSISTANT_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
+set(VOICE_ASSISTANT_VERSION_MINOR ${PROJECT_VERSION_MINOR})
+set(VOICE_ASSISTANT_VERSION_PATCH ${PROJECT_VERSION_PATCH})
+
+# 平台检测和配置
 if(CMAKE_HOST_UNIX)
-    # Add our custom CMake modules directory
+    # Linux 平台配置
     list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/finders")
     find_package(PulseAudio REQUIRED)
+    set(PLATFORM_NAME "linux")
 elseif(CMAKE_HOST_WIN32)
-    # Windows platform doesn't use PulseAudio
-    message(STATUS "Building on Windows platform")
-    
-    # 设置 MSYS2 根目录
+    # Windows 平台配置
+    set(PLATFORM_NAME "windows")
     if(NOT DEFINED MSYS64_ROOT)
         set(MSYS64_ROOT "D:/msys64")
     endif()
@@ -30,88 +36,65 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # 设置编译选项
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
+if(MSVC)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
+else()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
+endif()
+
+# 设置输出目录
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 # 查找必要的包
-
 find_package(Threads REQUIRED)
 find_package(YAML-CPP REQUIRED)
 find_package(nlohmann_json REQUIRED)
 find_package(CURL REQUIRED)
 
-
-# set SHERPA_ONNX version
+# sherpa-onnx 配置
 set(SHERPA_ONNX_VERSION "1.10.41")
+set(SHERPA_ONNX_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx-prebuilt")
 
-# sherpa-onnx 依赖
 if(WIN32)
-    include(FetchContent)
     set(SHERPA_ONNX_URL "https://github.com/k2-fsa/sherpa-onnx/releases/download/v${SHERPA_ONNX_VERSION}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-win-x64-shared.tar.bz2")
-    set(SHERPA_ONNX_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx-prebuilt")
     set(SHERPA_ONNX_ARCHIVE "${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx-v${SHERPA_ONNX_VERSION}-win-x64-shared.tar.bz2")
+else()
+    set(SHERPA_ONNX_URL "https://github.com/k2-fsa/sherpa-onnx/releases/download/v${SHERPA_ONNX_VERSION}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-shared.tar.bz2")
+    set(SHERPA_ONNX_ARCHIVE "${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-shared.tar.bz2")
+endif()
 
-    if(NOT EXISTS "${SHERPA_ONNX_ROOT}")
-        # 创建目录
-        file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dep")
-        
-        # 下载预编译包
-        if(NOT EXISTS "${SHERPA_ONNX_ARCHIVE}")
-            message(STATUS "Downloading pre-built sherpa-onnx for Windows...")
-            file(DOWNLOAD ${SHERPA_ONNX_URL} ${SHERPA_ONNX_ARCHIVE}
-                SHOW_PROGRESS
-                STATUS DOWNLOAD_STATUS
-            )
-            list(GET DOWNLOAD_STATUS 0 STATUS_CODE)
-            if(NOT STATUS_CODE EQUAL 0)
-                message(FATAL_ERROR "Failed to download sherpa-onnx")
-            endif()
-        endif()
-        
-        # 解压文件
-        message(STATUS "Extracting sherpa-onnx...")
-        execute_process(
-            COMMAND ${CMAKE_COMMAND} -E tar xf ${SHERPA_ONNX_ARCHIVE}
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/dep
+# 下载和解压 sherpa-onnx
+if(NOT EXISTS "${SHERPA_ONNX_ROOT}")
+    file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dep")
+    
+    if(NOT EXISTS "${SHERPA_ONNX_ARCHIVE}")
+        message(STATUS "Downloading pre-built sherpa-onnx...")
+        file(DOWNLOAD ${SHERPA_ONNX_URL} ${SHERPA_ONNX_ARCHIVE}
+            SHOW_PROGRESS
+            STATUS DOWNLOAD_STATUS
         )
-        
-        # 重命名目录
+        list(GET DOWNLOAD_STATUS 0 STATUS_CODE)
+        if(NOT STATUS_CODE EQUAL 0)
+            message(FATAL_ERROR "Failed to download sherpa-onnx")
+        endif()
+    endif()
+    
+    message(STATUS "Extracting sherpa-onnx...")
+    execute_process(
+        COMMAND ${CMAKE_COMMAND} -E tar xf ${SHERPA_ONNX_ARCHIVE}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/dep
+    )
+    
+    if(WIN32)
         file(RENAME 
             "${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx-v${SHERPA_ONNX_VERSION}-win-x64-shared"
             "${SHERPA_ONNX_ROOT}"
         )
-    endif()
-else()
-    # linux 平台 https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.10.41/sherpa-onnx-v1.10.41-linux-x64-shared.tar.bz2
-    set(SHERPA_ONNX_URL "https://github.com/k2-fsa/sherpa-onnx/releases/download/v${SHERPA_ONNX_VERSION}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-shared.tar.bz2")
-    set(SHERPA_ONNX_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx-prebuilt")
-    set(SHERPA_ONNX_ARCHIVE "${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-shared.tar.bz2")
-
-    if(NOT EXISTS "${SHERPA_ONNX_ROOT}")
-        # 创建目录
-        file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dep")
-        
-        # 下载预编译包
-        if(NOT EXISTS "${SHERPA_ONNX_ARCHIVE}")
-            message(STATUS "Downloading pre-built sherpa-onnx for Linux...")
-            file(DOWNLOAD ${SHERPA_ONNX_URL} ${SHERPA_ONNX_ARCHIVE}
-                SHOW_PROGRESS
-                STATUS DOWNLOAD_STATUS
-            )
-            list(GET DOWNLOAD_STATUS 0 STATUS_CODE)
-            if(NOT STATUS_CODE EQUAL 0)
-                message(FATAL_ERROR "Failed to download sherpa-onnx")
-            endif()
-        endif()
-        
-        # 解压文件
-        message(STATUS "Extracting sherpa-onnx...")
-        execute_process(
-            COMMAND ${CMAKE_COMMAND} -E tar xf ${SHERPA_ONNX_ARCHIVE}
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/dep
-        )
-        # 重命名目录
+    else()
         file(RENAME 
             "${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-shared"
             "${SHERPA_ONNX_ROOT}"
@@ -129,7 +112,7 @@ endif()
 # 设置包含目录
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx-prebuilt/include
+    ${SHERPA_ONNX_INCLUDE_DIR}
     ${PULSEAUDIO_INCLUDE_DIR}
     ${YAML_CPP_INCLUDE_DIR}
     ${CURL_INCLUDE_DIRS}
@@ -137,7 +120,7 @@ include_directories(
 
 # 添加链接目录
 link_directories(
-    ${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx-prebuilt/lib
+    ${SHERPA_ONNX_LIB_DIR}
 )
 
 # 添加子目录
@@ -145,7 +128,23 @@ add_subdirectory(src)
 add_subdirectory(test)
 
 # 打包配置
-set(CPACK_GENERATOR "DEB")
+include(InstallRequiredSystemLibraries)
+
+if(WIN32)
+    set(CPACK_GENERATOR "ZIP;NSIS")
+    set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
+    set(CPACK_NSIS_MODIFY_PATH ON)
+    set(CPACK_NSIS_DISPLAY_NAME "Voice Assistant")
+    set(CPACK_NSIS_PACKAGE_NAME "Voice Assistant")
+    set(CPACK_NSIS_CONTACT "yuebanlaosiji@outlook.com")
+    set(CPACK_PACKAGE_INSTALL_DIRECTORY "VoiceAssistant")
+else()
+    set(CPACK_GENERATOR "DEB;TGZ")
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libpulse0, libcurl4, libyaml-cpp0.6")
+    set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Yue Ban <yuebanlaosiji@outlook.com")
+    set(CPACK_DEBIAN_PACKAGE_SECTION "sound")
+endif()
+
 set(CPACK_PACKAGE_NAME "voice-assistant")
 set(CPACK_PACKAGE_VENDOR "YueBan")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Audio recorder with speech recognition")
@@ -153,6 +152,13 @@ set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
 set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
 set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
 set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "libpulse0, libcurl4, libyaml-cpp0.6")
+set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${PLATFORM_NAME}")
+
+# 安装配置文件
+install(FILES 
+    "${CMAKE_CURRENT_SOURCE_DIR}/config/config.${PLATFORM_NAME}.yaml"
+    DESTINATION etc/voice_assistant
+    RENAME config.yaml
+)
 
 include(CPack)
