@@ -98,20 +98,24 @@ else()
 endif()
 
 # 安装配置
-install(TARGETS voice_assistant
+install(TARGETS voice_assistant audio_capture
     RUNTIME DESTINATION .
+    LIBRARY DESTINATION .
 )
-
+# install dll
 if(WIN32)
-    # 输出信息
-    message(STATUS "Install DLL from ${CMAKE_BINARY_DIR}")
-    # 安装DLL依赖
-    file(GLOB DLL_FILES 
-        "${CMAKE_BINARY_DIR}/bin/*.dll"
-        "${CMAKE_BINARY_DIR}/src/*.dll"
-    )
-    install(FILES ${DLL_FILES}
-        DESTINATION .
+    install(FILES
+    "${CMAKE_BINARY_DIR}/bin/libaudio_capture.dll"
+    "${MSYS64_ROOT}/ucrt64/bin/libyaml-cpp.dll"
+    "${SHERPA_ONNX_LIB_DIR}/sherpa-onnx-c-api.dll"
+    "${SHERPA_ONNX_LIB_DIR}/sherpa-onnx-cxx-api.dll"
+    "${SHERPA_ONNX_LIB_DIR}/cargs.dll"
+    "${SHERPA_ONNX_LIB_DIR}/onnxruntime.dll"
+    "${SHERPA_ONNX_LIB_DIR}/onnxruntime_providers_shared.dll"
+    "${MSYS64_ROOT}/ucrt64/bin/libgcc_s_seh-1.dll"
+    "${MSYS64_ROOT}/ucrt64/bin/libstdc++-6.dll"
+    "${MSYS64_ROOT}/ucrt64/bin/libwinpthread-1.dll"
+    DESTINATION .
     )
 endif()
 
