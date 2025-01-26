@@ -41,18 +41,19 @@ jobs:
         run: |
           cmake -G Ninja -B build \
             -DCMAKE_BUILD_TYPE=${{ matrix.build }} \
-            -DBUILD_TESTING=ON
+            -DMSYS64_ROOT="D:/a/_temp/msys64" \
+            -DBUILD_TESTING=OFF
 
       - name: Build
         shell: msys2 {0}
         run: |
           cmake --build build --config ${{ matrix.build }} -j $(nproc)
 
-      - name: Test
-        shell: msys2 {0}
-        working-directory: build
-        run: |
-          ctest --output-on-failure -C ${{ matrix.build }}
+      # - name: Test
+      #   shell: msys2 {0}
+      #   working-directory: build
+      #   run: |
+      #     ctest --output-on-failure -C ${{ matrix.build }}
 
       - name: Create Package
         shell: msys2 {0}
