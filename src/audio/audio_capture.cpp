@@ -1,11 +1,10 @@
 #include "audio_capture.h"
+#include <memory>
 
 #ifdef _WIN32
 #include "windows/wasapi_capture.h"
-#endif
-
-#ifdef __linux__
-#include "linux/pulse_audio_capture.h"
+#else
+#include "linux_pulease/pulse_audio_capture.h"
 #endif
 
 namespace audio {

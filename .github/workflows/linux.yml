@@ -36,29 +36,29 @@ jobs:
         apt-get install -y nlohmann-json3-dev
         apt-get install -y libcurl4-openssl-dev
 
-    - name: Build sherpa-onnx
-      run: |
-        cd dep/sherpa-onnx
-        mkdir -p build && cd build
-        export CC=gcc
-        export CXX=g++
-        cmake -DCMAKE_INSTALL_PREFIX=./install \
-              -DCMAKE_BUILD_TYPE=Release \
-              -DBUILD_SHARED_LIBS=ON \
-              -DSHERPA_ONNX_ENABLE_C_API=ON \
-              -DSHERPA_ONNX_ENABLE_CXX_API=ON \
-              -DSHERPA_ONNX_ENABLE_PYTHON=OFF \
-              -DSHERPA_ONNX_ENABLE_TESTS=OFF \
-              -DSHERPA_ONNX_ENABLE_CHECK=OFF \
-              -DSHERPA_ONNX_ENABLE_PORTAUDIO=OFF \
-              -DSHERPA_ONNX_ENABLE_WEBSOCKET=OFF \
-              -DSHERPA_ONNX_ENABLE_JNI=OFF \
-              -DSHERPA_ONNX_ENABLE_BINARY=OFF \
-              -DSHERPA_ONNX_USE_PRE_INSTALLED_ONNXRUNTIME_IF_AVAILABLE=ON \
-              ..
-        make VERBOSE=1 -j$(nproc)
-        make install
-        cd ../../..
+    # - name: Build sherpa-onnx
+    #   run: |
+    #     cd dep/sherpa-onnx
+    #     mkdir -p build && cd build
+    #     export CC=gcc
+    #     export CXX=g++
+    #     cmake -DCMAKE_INSTALL_PREFIX=./install \
+    #           -DCMAKE_BUILD_TYPE=Release \
+    #           -DBUILD_SHARED_LIBS=ON \
+    #           -DSHERPA_ONNX_ENABLE_C_API=ON \
+    #           -DSHERPA_ONNX_ENABLE_CXX_API=ON \
+    #           -DSHERPA_ONNX_ENABLE_PYTHON=OFF \
+    #           -DSHERPA_ONNX_ENABLE_TESTS=OFF \
+    #           -DSHERPA_ONNX_ENABLE_CHECK=OFF \
+    #           -DSHERPA_ONNX_ENABLE_PORTAUDIO=OFF \
+    #           -DSHERPA_ONNX_ENABLE_WEBSOCKET=OFF \
+    #           -DSHERPA_ONNX_ENABLE_JNI=OFF \
+    #           -DSHERPA_ONNX_ENABLE_BINARY=OFF \
+    #           -DSHERPA_ONNX_USE_PRE_INSTALLED_ONNXRUNTIME_IF_AVAILABLE=ON \
+    #           ..
+    #     make VERBOSE=1 -j$(nproc)
+    #     make install
+    #     cd ../../..
 
     - name: Configure
       run: |
