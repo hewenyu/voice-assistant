@@ -69,9 +69,9 @@ if(WIN32)
     # 复制 MSYS2 运行时 DLL
     add_custom_command(TARGET test_audio_capture POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "D:/msys64/ucrt64/bin/libgcc_s_seh-1.dll"
-            "D:/msys64/ucrt64/bin/libstdc++-6.dll"
-            "D:/msys64/ucrt64/bin/libwinpthread-1.dll"
+            "${MSYS64_ROOT}/ucrt64/bin/libgcc_s_seh-1.dll"
+            "${MSYS64_ROOT}/ucrt64/bin/libstdc++-6.dll"
+            "${MSYS64_ROOT}/ucrt64/bin/libwinpthread-1.dll"
             $<TARGET_FILE_DIR:test_audio_capture>
     )
 
