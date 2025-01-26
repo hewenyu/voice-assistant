@@ -103,12 +103,13 @@ install(TARGETS voice_assistant
 )
 
 if(WIN32)
-    # 安装DLL依赖 *.dll
-    install(FILES
-        ${CMAKE_BINARY_DIR}/bin/*.dll
+    # 安装DLL依赖
+    file(GLOB DLL_FILES "${CMAKE_BINARY_DIR}/bin/*.dll")
+    install(FILES ${DLL_FILES}
         DESTINATION bin
     )
 endif()
+
 
 # 安装配置文件
 install(FILES 
