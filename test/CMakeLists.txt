@@ -31,38 +31,38 @@ if(WIN32)
     add_custom_command(TARGET test_audio_capture POST_BUILD
         # 复制 yaml-cpp DLL
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "D:/msys64/ucrt64/bin/libyaml-cpp.dll"
+            "${MSYS64_ROOT}/ucrt64/bin/libyaml-cpp.dll"
             $<TARGET_FILE_DIR:test_audio_capture>
     )
 
     add_custom_command(TARGET test_audio_capture POST_BUILD
         # 复制 sherpa-onnx DLL
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_SOURCE_DIR}/dep/sherpa-onnx-prebuilt/lib/sherpa-onnx-c-api.dll"
+            "${SHERPA_ONNX_LIB_DIR}/sherpa-onnx-c-api.dll"
             $<TARGET_FILE_DIR:test_audio_capture>
     )
 
     add_custom_command(TARGET test_audio_capture POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_SOURCE_DIR}/dep/sherpa-onnx-prebuilt/lib/sherpa-onnx-cxx-api.dll"
+            "${SHERPA_ONNX_LIB_DIR}/sherpa-onnx-cxx-api.dll"
             $<TARGET_FILE_DIR:test_audio_capture>
     )
 
     add_custom_command(TARGET test_audio_capture POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_SOURCE_DIR}/dep/sherpa-onnx-prebuilt/lib/cargs.dll"
+            "${SHERPA_ONNX_LIB_DIR}/cargs.dll"
             $<TARGET_FILE_DIR:test_audio_capture>
     )
 
     add_custom_command(TARGET test_audio_capture POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_SOURCE_DIR}/dep/sherpa-onnx-prebuilt/lib/onnxruntime.dll"
+            "${SHERPA_ONNX_LIB_DIR}/onnxruntime.dll"
             $<TARGET_FILE_DIR:test_audio_capture>
     )
 
     add_custom_command(TARGET test_audio_capture POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_SOURCE_DIR}/dep/sherpa-onnx-prebuilt/lib/onnxruntime_providers_shared.dll"
+            "${SHERPA_ONNX_LIB_DIR}/onnxruntime_providers_shared.dll"
             $<TARGET_FILE_DIR:test_audio_capture>
     )
 
@@ -77,7 +77,7 @@ if(WIN32)
 
     # Windows 测试配置
     add_test(NAME test_audio_capture 
-        COMMAND ${CMAKE_COMMAND} -E env "PATH=${CMAKE_BINARY_DIR}/bin;${CMAKE_SOURCE_DIR}/dep/sherpa-onnx-prebuilt/lib;D:/msys64/ucrt64/bin;$ENV{PATH}" 
+        COMMAND ${CMAKE_COMMAND} -E env "PATH=${CMAKE_BINARY_DIR}/bin;${SHERPA_ONNX_LIB_DIR};D:/msys64/ucrt64/bin;$ENV{PATH}" 
         $<TARGET_FILE:test_audio_capture>
     )
 # Linux 特定配置
