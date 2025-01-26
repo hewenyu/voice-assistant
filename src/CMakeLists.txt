@@ -98,9 +98,8 @@ else()
 endif()
 
 # 安装配置
-install(TARGETS voice_assistant audio_capture
+install(TARGETS voice_assistant
     RUNTIME DESTINATION .
-    LIBRARY DESTINATION .
 )
 # install dll
 if(WIN32)
