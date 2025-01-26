@@ -102,6 +102,14 @@ install(TARGETS voice_assistant
     RUNTIME DESTINATION bin
 )
 
+if(WIN32)
+    # 安装DLL依赖 *.dll
+    install(FILES
+        ${CMAKE_BINARY_DIR}/bin/*.dll
+        DESTINATION bin
+    )
+endif()
+
 # 安装配置文件
 install(FILES 
     "${CMAKE_CURRENT_SOURCE_DIR}/../config/config.yaml.template"

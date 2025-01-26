@@ -65,4 +65,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: voice-assistant-${{ matrix.sys }}-${{ matrix.build }}
-          path: build/voice-assistant-*.zip 
+          path: build/voice-assistant-*.zip
+          retention-days: 1
