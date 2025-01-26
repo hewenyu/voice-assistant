@@ -4,8 +4,20 @@ project(voice_assistant VERSION 1.0.0 LANGUAGES CXX)
 # 启用测试
 enable_testing()
 
-# Add our custom CMake modules directory
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/finders")
+if(CMAKE_HOST_UNIX)
+    # Add our custom CMake modules directory
+    list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/finders")
+    find_package(PulseAudio REQUIRED)
+elseif(CMAKE_HOST_WIN32)
+    # Windows platform doesn't use PulseAudio
+    message(STATUS "Building on Windows platform")
+    
+    # 设置 MSYS2 根目录
+    if(NOT DEFINED MSYS64_ROOT)
+        set(MSYS64_ROOT "D:/msys64")
+    endif()
+    message(STATUS "Using MSYS2 root: ${MSYS64_ROOT}")
+endif()
 
 # 设置C++标准
 set(CMAKE_CXX_STANDARD 17)
@@ -23,14 +35,53 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
 
 # 查找必要的包
-find_package(PulseAudio REQUIRED)
+
 find_package(Threads REQUIRED)
 find_package(YAML-CPP REQUIRED)
-find_package(nlohmann_json 3.2.0 REQUIRED)
+find_package(nlohmann_json REQUIRED)
 find_package(CURL REQUIRED)
 
 # sherpa-onnx 依赖
-set(SHERPA_ONNX_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx/build/install")
+if(WIN32)
+    include(FetchContent)
+    set(SHERPA_ONNX_URL "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.10.41/sherpa-onnx-v1.10.41-win-x64-shared.tar.bz2")
+    set(SHERPA_ONNX_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx-prebuilt")
+    set(SHERPA_ONNX_ARCHIVE "${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx-v1.9.12-win-x64-shared.tar.bz2")
+    
+    if(NOT EXISTS "${SHERPA_ONNX_ROOT}")
+        # 创建目录
+        file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dep")
+        
+        # 下载预编译包
+        if(NOT EXISTS "${SHERPA_ONNX_ARCHIVE}")
+            message(STATUS "Downloading pre-built sherpa-onnx for Windows...")
+            file(DOWNLOAD ${SHERPA_ONNX_URL} ${SHERPA_ONNX_ARCHIVE}
+                SHOW_PROGRESS
+                STATUS DOWNLOAD_STATUS
+            )
+            list(GET DOWNLOAD_STATUS 0 STATUS_CODE)
+            if(NOT STATUS_CODE EQUAL 0)
+                message(FATAL_ERROR "Failed to download sherpa-onnx")
+            endif()
+        endif()
+        
+        # 解压文件
+        message(STATUS "Extracting sherpa-onnx...")
+        execute_process(
+            COMMAND ${CMAKE_COMMAND} -E tar xf ${SHERPA_ONNX_ARCHIVE}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/dep
+        )
+        
+        # 重命名目录
+        file(RENAME 
+            "${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx-v1.10.41-win-x64-shared"
+            "${SHERPA_ONNX_ROOT}"
+        )
+    endif()
+else()
+    set(SHERPA_ONNX_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx/build/install")
+endif()
+
 set(SHERPA_ONNX_INCLUDE_DIR "${SHERPA_ONNX_ROOT}/include")
 set(SHERPA_ONNX_LIB_DIR "${SHERPA_ONNX_ROOT}/lib")
 
@@ -41,17 +92,20 @@ endif()
 # 设置包含目录
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx-prebuilt/include
     ${PULSEAUDIO_INCLUDE_DIR}
     ${YAML_CPP_INCLUDE_DIR}
-    ${SHERPA_ONNX_INCLUDE_DIR}
     ${CURL_INCLUDE_DIRS}
 )
 
 # 添加链接目录
-link_directories(${SHERPA_ONNX_LIB_DIR})
+link_directories(
+    ${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx-prebuilt/lib
+)
 
 # 添加子目录
 add_subdirectory(src)
+add_subdirectory(test)
 
 # 打包配置
 set(CPACK_GENERATOR "DEB")
