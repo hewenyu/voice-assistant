@@ -41,13 +41,17 @@ find_package(YAML-CPP REQUIRED)
 find_package(nlohmann_json REQUIRED)
 find_package(CURL REQUIRED)
 
+
+# set SHERPA_ONNX version
+set(SHERPA_ONNX_VERSION "1.10.41")
+
 # sherpa-onnx 依赖
 if(WIN32)
     include(FetchContent)
-    set(SHERPA_ONNX_URL "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.10.41/sherpa-onnx-v1.10.41-win-x64-shared.tar.bz2")
+    set(SHERPA_ONNX_URL "https://github.com/k2-fsa/sherpa-onnx/releases/download/v${SHERPA_ONNX_VERSION}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-win-x64-shared.tar.bz2")
     set(SHERPA_ONNX_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx-prebuilt")
-    set(SHERPA_ONNX_ARCHIVE "${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx-v1.9.12-win-x64-shared.tar.bz2")
-    
+    set(SHERPA_ONNX_ARCHIVE "${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx-v${SHERPA_ONNX_VERSION}-win-x64-shared.tar.bz2")
+
     if(NOT EXISTS "${SHERPA_ONNX_ROOT}")
         # 创建目录
         file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dep")
@@ -74,12 +78,45 @@ if(WIN32)
         
         # 重命名目录
         file(RENAME 
-            "${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx-v1.10.41-win-x64-shared"
+            "${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx-v${SHERPA_ONNX_VERSION}-win-x64-shared"
             "${SHERPA_ONNX_ROOT}"
         )
     endif()
 else()
-    set(SHERPA_ONNX_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx/build/install")
+    # linux 平台 https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.10.41/sherpa-onnx-v1.10.41-linux-x64-shared.tar.bz2
+    set(SHERPA_ONNX_URL "https://github.com/k2-fsa/sherpa-onnx/releases/download/v${SHERPA_ONNX_VERSION}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-shared.tar.bz2")
+    set(SHERPA_ONNX_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx-prebuilt")
+    set(SHERPA_ONNX_ARCHIVE "${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-shared.tar.bz2")
+
+    if(NOT EXISTS "${SHERPA_ONNX_ROOT}")
+        # 创建目录
+        file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dep")
+        
+        # 下载预编译包
+        if(NOT EXISTS "${SHERPA_ONNX_ARCHIVE}")
+            message(STATUS "Downloading pre-built sherpa-onnx for Linux...")
+            file(DOWNLOAD ${SHERPA_ONNX_URL} ${SHERPA_ONNX_ARCHIVE}
+                SHOW_PROGRESS
+                STATUS DOWNLOAD_STATUS
+            )
+            list(GET DOWNLOAD_STATUS 0 STATUS_CODE)
+            if(NOT STATUS_CODE EQUAL 0)
+                message(FATAL_ERROR "Failed to download sherpa-onnx")
+            endif()
+        endif()
+        
+        # 解压文件
+        message(STATUS "Extracting sherpa-onnx...")
+        execute_process(
+            COMMAND ${CMAKE_COMMAND} -E tar xf ${SHERPA_ONNX_ARCHIVE}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/dep
+        )
+        # 重命名目录
+        file(RENAME 
+            "${CMAKE_CURRENT_SOURCE_DIR}/dep/sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-shared"
+            "${SHERPA_ONNX_ROOT}"
+        )
+    endif()
 endif()
 
 set(SHERPA_ONNX_INCLUDE_DIR "${SHERPA_ONNX_ROOT}/include")
