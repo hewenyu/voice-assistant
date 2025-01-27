@@ -74,3 +74,6 @@ run.sh
 
 # src-back directory
 src-back/
+
+
+dep/sherpa-onnx-*

@@ -1,9 +1,12 @@
-name: Release
+name: Release_master
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
 
 permissions:
   contents: write
@@ -28,13 +31,3 @@ jobs:
       - name: ls artifacts
         run: |
           ls artifacts
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            artifacts/voice-assistant-linux/voice-assistant-*.tar.gz
-            artifacts/voice-assistant-windows/voice-assistant-*.zip
-          draft: false
-          prerelease: false
-          generate_release_notes: true
