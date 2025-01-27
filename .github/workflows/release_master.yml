@@ -32,7 +32,7 @@ jobs:
       - name: Download Windows artifacts
         uses: actions/download-artifact@v3
         with:
-          name: voice-assistant-windows-x64.zip
+          name: voice-assistant-UCRT64-Release.zip
           path: artifacts
 
       - name: ls artifacts
