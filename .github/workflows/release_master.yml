@@ -1,0 +1,40 @@
+name: Release_master
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    uses: ./.github/workflows/linux.yml
+  windows:
+    uses: ./.github/workflows/windows.yml
+
+  release:
+    needs: [linux, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: voice-assistant-linux-x64.tar.gz
+          path: artifacts
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: voice-assistant-UCRT64-Release.zip
+          path: artifacts
+
+      - name: ls artifacts
+        run: |
+          ls artifacts
