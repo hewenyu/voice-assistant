@@ -609,23 +609,23 @@ void WasapiCapture::process_audio_for_recognition(const std::vector<int16_t>& au
                         // lang
                         std::cout << "Language: " << result->lang << std::endl;
 
-                        // if (result->lang && translate_) {
-                        //     std::string language_code = std::string(result->lang).substr(2, 2);
-                        //     std::transform(language_code.begin(), language_code.end(), language_code.begin(), ::toupper);
-                        //     std::cout << "Language Code: " << language_code << std::endl;
+                        if (result->lang && translate_) {
+                            std::string language_code = std::string(result->lang).substr(2, 2);
+                            std::transform(language_code.begin(), language_code.end(), language_code.begin(), ::toupper);
+                            std::cout << "Language Code: " << language_code << std::endl;
 
-                        //     std::string target_lang = translate_->get_target_language();
-                        //     std::transform(target_lang.begin(), target_lang.end(), target_lang.begin(), ::toupper);
-                        //     std::cout << "Target Language: " << target_lang << std::endl;
+                            std::string target_lang = translate_->get_target_language();
+                            std::transform(target_lang.begin(), target_lang.end(), target_lang.begin(), ::toupper);
+                            std::cout << "Target Language: " << target_lang << std::endl;
                             
-                        //     if (target_lang != language_code) {
-                        //         try {
-                        //             std::string translated_text = translate_->translate(result->text, language_code);
-                        //             std::cout << "Translated Text: " << translated_text << std::endl;
-                        //         } catch (const std::exception& e) {
-                        //             std::cerr << "Error translating text: " << e.what() << std::endl;
-                        //         }
-                        // }
+                            if (target_lang != language_code) {
+                                try {
+                                    std::string translated_text = translate_->translate(result->text, language_code);
+                                    std::cout << "Translated Text: " << translated_text << std::endl;
+                                } catch (const std::exception& e) {
+                                    std::cerr << "Error translating text: " << e.what() << std::endl;
+                                }
+                        }
                         std::cout << std::string(50, '-') << std::endl;
                     }
 
