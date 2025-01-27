@@ -81,6 +81,6 @@ jobs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v3
       with:
-          name: voice-assistant-linux-x64.tar.gz
+          name: voice-assistant-linux
           path: build/voice-assistant-*.tar.gz 
           retention-days: 3

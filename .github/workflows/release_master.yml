@@ -26,13 +26,13 @@ jobs:
       - name: Download Linux artifacts
         uses: actions/download-artifact@v3
         with:
-          name: voice-assistant-linux-x64.tar.gz
+          name: voice-assistant-linux
           path: artifacts
 
       - name: Download Windows artifacts
         uses: actions/download-artifact@v3
         with:
-          name: voice-assistant-UCRT64-Release
+          name: voice-assistant-windows
           path: artifacts
 
       - name: ls artifacts
