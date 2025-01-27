@@ -1,4 +1,5 @@
 #include "translator/deepl/deeplx_translator.h"
+#include <iostream>
 #include <regex>
 #include <sstream>
 #include <stdexcept>
@@ -26,6 +27,7 @@ DeepLXTranslator::DeepLXTranslator(const common::ModelConfig& config) {
     // Parse URL to get host, port, and path
     std::regex url_regex("^(https?://)?([^/:]+)(?::(\\d+))?(/.*)?$");
     std::smatch matches;
+    std::cout << "URL: " << url_ << std::endl;
     if (std::regex_match(url_, matches, url_regex)) {
         host_ = matches[2].str();
         port_ = matches[3].length() > 0 ? std::stoi(matches[3].str()) : 80;

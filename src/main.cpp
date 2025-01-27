@@ -6,8 +6,12 @@
 #include <thread>
 #include <atomic>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #include <common/model_config.h>
-#include <audio/linux_pulease/pulse_audio_capture.h>
+#include <audio/audio_capture.h>
 #include <translator/translator.h>
 #include <sherpa-onnx/c-api/c-api.h>
 #include <recognizer/model_factory.h>
@@ -53,9 +57,14 @@ void print_usage() {
 }
 
 int main(int argc, char* argv[]) {
-    if (argc < 2) {
+    #ifdef _WIN32
+    SetConsoleOutputCP(CP_UTF8);
+    #endif
+
+    // 如果没有参数，显示帮助信息并退出
+    if (argc == 1) {
         print_usage();
-        return 1;
+        return 0;
     }
 
     // Register signal handler for graceful shutdown
@@ -81,6 +90,10 @@ int main(int argc, char* argv[]) {
         } else if (arg == "-h" || arg == "--help") {
             print_usage();
             return 0;
+        } else {
+            std::cerr << "Unknown option: " << arg << std::endl;
+            print_usage();
+            return 1;
         }
     }
 
@@ -88,9 +101,20 @@ int main(int argc, char* argv[]) {
         std::cout << "Listing available audio sources..." << std::endl;
         // Create audio capture instance
         auto audio_capture = audio::IAudioCapture::CreateAudioCapture();
-        audio_capture->initialize();
+        if (!audio_capture) {
+            std::cerr << "Failed to create audio capture instance" << std::endl;
+            return 1;
+        }
+        std::cout << "Audio capture instance created successfully" << std::endl;
+
+        if (!audio_capture->initialize()) {
+            std::cerr << "Failed to initialize audio capture" << std::endl;
+            return 1;
+        }
+        std::cout << "Audio capture initialized successfully" << std::endl;
+
+        std::cout << "\nAvailable audio sources:" << std::endl;
         audio_capture->list_applications();
-        // audio_capture->cleanup();
         return 0;
     }
 

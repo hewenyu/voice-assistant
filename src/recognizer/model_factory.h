@@ -3,8 +3,8 @@
 #include <memory>
 #include <string>
 #include <iostream>
-#include "model_config.h"
-#include "sherpa-onnx/c-api/c-api.h"
+#include "common/model_config.h"
+#include <sherpa-onnx/c-api/c-api.h>
 
 namespace recognizer {
 

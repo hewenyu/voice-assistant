@@ -1,16 +1,33 @@
 # 收集源文件
+file(GLOB_RECURSE COMMON_SOURCES
+    "common/*.cpp"
+    "common/*.h"
+    "recognizer/*.cpp"
+    "recognizer/*.h"
+    "translator/*.cpp"
+    "translator/*.h"
+    "utills/*.cpp"
+    "utills/*.h"
+)
+
 if(WIN32)
-    file(GLOB_RECURSE SOURCES
-        "*.cpp"
-        "*.h"
+    file(GLOB_RECURSE PLATFORM_SOURCES
+        "audio/windows/*.cpp"
+        "audio/windows/*.h"
     )
 else()
-    file(GLOB_RECURSE SOURCES
-        "*.cpp"
-        "*.h"
+    file(GLOB_RECURSE PLATFORM_SOURCES
+        "audio/linux_pulease/*.cpp"
+        "audio/linux_pulease/*.h"
     )
-    list(FILTER SOURCES EXCLUDE REGEX ".*windows/.*")
 endif()
+
+set(SOURCES
+    ${COMMON_SOURCES}
+    ${PLATFORM_SOURCES}
+    "main.cpp"
+    "audio/audio_capture.cpp"
+)
 
 # 创建可执行文件
 add_executable(voice_assistant ${SOURCES})
@@ -23,35 +40,101 @@ target_include_directories(voice_assistant
     ${CMAKE_CURRENT_SOURCE_DIR}/common
     ${CMAKE_CURRENT_SOURCE_DIR}/recognizer
     ${CMAKE_CURRENT_SOURCE_DIR}/translator
-    ${PULSEAUDIO_INCLUDE_DIR}
+    ${SHERPA_ONNX_INCLUDE_DIR}
 )
 
-# 链接依赖库
-target_link_libraries(voice_assistant
+# 创建音频捕获库
+add_library(audio_capture SHARED
+    "audio/audio_capture.cpp"
+    ${PLATFORM_SOURCES}
+)
+
+# 添加导出宏
+target_compile_definitions(audio_capture
     PRIVATE
-    pulse
-    pulse-simple
-    ${CMAKE_THREAD_LIBS_INIT}
-    ${YAML_CPP_LIBRARIES}
-    nlohmann_json::nlohmann_json
-    ${CURL_LIBRARIES}
-    sherpa-onnx-c-api
-    sherpa-onnx-cxx-api
+    AUDIO_CAPTURE_EXPORTS
+    PUBLIC
+    AUDIO_CAPTURE_DLL
+)
+
+# 设置音频捕获库的包含目录
+target_include_directories(audio_capture
+    PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${SHERPA_ONNX_INCLUDE_DIR}
+)
+
+# 平台特定配置
+if(WIN32)
+    # Windows 特定链接
+    target_link_libraries(voice_assistant
+        PRIVATE
+        audio_capture
+        sherpa-onnx-c-api
+        sherpa-onnx-cxx-api
+        ${CMAKE_THREAD_LIBS_INIT}
+        ${YAML_CPP_LIBRARIES}
+        nlohmann_json::nlohmann_json
+        ${CURL_LIBRARIES}
+        ole32
+        oleaut32
+        winmm
+        ksuser
+        avrt
+    )
+
+    target_link_libraries(audio_capture
+        PUBLIC
+        sherpa-onnx-c-api
+        ${YAML_CPP_LIBRARIES}
+        ole32
+        oleaut32
+        winmm
+        ksuser
+        avrt
+    )
+else()
+    # Linux 特定链接
+    target_link_libraries(voice_assistant
+        PRIVATE
+        audio_capture
+        sherpa-onnx-c-api
+        sherpa-onnx-cxx-api
+        ${CMAKE_THREAD_LIBS_INIT}
+        ${YAML_CPP_LIBRARIES}
+        nlohmann_json::nlohmann_json
+        ${CURL_LIBRARIES}
+        pulse
+        pulse-simple
+    )
+
+    target_link_libraries(audio_capture
+        PUBLIC
+        sherpa-onnx-c-api
+        ${YAML_CPP_LIBRARIES}
+        pulse
+        pulse-simple
+    )
+endif()
+
+# 设置输出目录
+set_target_properties(audio_capture PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    PDB_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
 # 安装配置
-install(TARGETS voice_assistant
+install(TARGETS voice_assistant audio_capture
     RUNTIME DESTINATION bin
+    LIBRARY DESTINATION bin
+    ARCHIVE DESTINATION bin
 )
 
 # 安装配置文件
 install(FILES 
-    "${CMAKE_CURRENT_SOURCE_DIR}/../config.yaml.example"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../config/config.yaml.template"
     DESTINATION etc/voice_assistant
     RENAME config.yaml
 )
-
-
-
-
-

@@ -3,10 +3,10 @@ name: Linux Build
 on:
   # push:
   #   branches:
-  #     - master
+  #     - devwin
   # pull_request:
   #   branches:
-  #     - master
+  #     - devwin
   workflow_call:
 
 jobs:
@@ -36,29 +36,29 @@ jobs:
         apt-get install -y nlohmann-json3-dev
         apt-get install -y libcurl4-openssl-dev
 
-    - name: Build sherpa-onnx
-      run: |
-        cd dep/sherpa-onnx
-        mkdir -p build && cd build
-        export CC=gcc
-        export CXX=g++
-        cmake -DCMAKE_INSTALL_PREFIX=./install \
-              -DCMAKE_BUILD_TYPE=Release \
-              -DBUILD_SHARED_LIBS=ON \
-              -DSHERPA_ONNX_ENABLE_C_API=ON \
-              -DSHERPA_ONNX_ENABLE_CXX_API=ON \
-              -DSHERPA_ONNX_ENABLE_PYTHON=OFF \
-              -DSHERPA_ONNX_ENABLE_TESTS=OFF \
-              -DSHERPA_ONNX_ENABLE_CHECK=OFF \
-              -DSHERPA_ONNX_ENABLE_PORTAUDIO=OFF \
-              -DSHERPA_ONNX_ENABLE_WEBSOCKET=OFF \
-              -DSHERPA_ONNX_ENABLE_JNI=OFF \
-              -DSHERPA_ONNX_ENABLE_BINARY=OFF \
-              -DSHERPA_ONNX_USE_PRE_INSTALLED_ONNXRUNTIME_IF_AVAILABLE=ON \
-              ..
-        make VERBOSE=1 -j$(nproc)
-        make install
-        cd ../../..
+    # - name: Build sherpa-onnx
+    #   run: |
+    #     cd dep/sherpa-onnx
+    #     mkdir -p build && cd build
+    #     export CC=gcc
+    #     export CXX=g++
+    #     cmake -DCMAKE_INSTALL_PREFIX=./install \
+    #           -DCMAKE_BUILD_TYPE=Release \
+    #           -DBUILD_SHARED_LIBS=ON \
+    #           -DSHERPA_ONNX_ENABLE_C_API=ON \
+    #           -DSHERPA_ONNX_ENABLE_CXX_API=ON \
+    #           -DSHERPA_ONNX_ENABLE_PYTHON=OFF \
+    #           -DSHERPA_ONNX_ENABLE_TESTS=OFF \
+    #           -DSHERPA_ONNX_ENABLE_CHECK=OFF \
+    #           -DSHERPA_ONNX_ENABLE_PORTAUDIO=OFF \
+    #           -DSHERPA_ONNX_ENABLE_WEBSOCKET=OFF \
+    #           -DSHERPA_ONNX_ENABLE_JNI=OFF \
+    #           -DSHERPA_ONNX_ENABLE_BINARY=OFF \
+    #           -DSHERPA_ONNX_USE_PRE_INSTALLED_ONNXRUNTIME_IF_AVAILABLE=ON \
+    #           ..
+    #     make VERBOSE=1 -j$(nproc)
+    #     make install
+    #     cd ../../..
 
     - name: Configure
       run: |
@@ -67,7 +67,7 @@ jobs:
         mkdir build && cd build
         cmake -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_PREFIX_PATH="/usr/lib/x86_64-linux-gnu/cmake;${{github.workspace}}/dep/sherpa-onnx/build/install" \
+          -DCMAKE_PREFIX_PATH="/usr/lib/x86_64-linux-gnu/cmake" \
           ..
 
     - name: Build
@@ -75,34 +75,12 @@ jobs:
 
     - name: Package artifacts
       run: |
-        mkdir -p artifacts/bin artifacts/lib artifacts/include artifacts/config artifacts/models
-        
-        # Copy executable
-        cp build/src/voice_assistant artifacts/bin/
-        
-        # Copy configuration files
-        cp config/config.yaml artifacts/config/
-        cp README*.md artifacts/
-        
-        # Copy sherpa-onnx libraries
-        cp -r dep/sherpa-onnx/build/install/lib/* artifacts/lib/
-        cp -r dep/sherpa-onnx/build/install/include/* artifacts/include/
-        
-        # Copy system dependencies
-        ldd artifacts/bin/* | grep "=> /" | awk '{print $3}' | sort -u | xargs -I '{}' cp -v '{}' artifacts/lib/
-        
-        # Create models directory structure
-        mkdir -p artifacts/models/sense_voice artifacts/models/vad
-        touch artifacts/models/sense_voice/.gitkeep
-        touch artifacts/models/vad/.gitkeep
-        
-        # Create archive
-        cd artifacts
-        tar czf ../voice-assistant-linux-x64.tar.gz *
-        cd ..
+        cd build
+        cpack -G TGZ
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v3
       with:
-        name: voice-assistant-linux-x64
-        path: voice-assistant-linux-x64.tar.gz 
+          name: voice-assistant-linux-x64.tar.gz
+          path: build/voice-assistant-*.tar.gz 
+          retention-days: 3
