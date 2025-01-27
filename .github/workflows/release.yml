@@ -20,24 +20,21 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Download Linux artifacts
-        uses: actions/download-artifact@v3
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
         with:
-          name: voice-assistant-linux-x64.tar.gz
           path: artifacts
 
-      - name: Download Windows artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: voice-assistant-UCRT64-Release.zip
-          path: artifacts
+      - name: ls artifacts
+        run: |
+          ls artifacts
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            artifacts/voice-assistant-linux-x64.tar.gz
-            artifacts/voice-assistant-UCRT64-Release.zip
+            artifacts/voice-assistant-linux/voice-assistant-*.tar.gz
+            artifacts/voice-assistant-windows/voice-assistant-*.zip
           draft: false
           prerelease: false
-          generate_release_notes: true 
+          generate_release_notes: true
