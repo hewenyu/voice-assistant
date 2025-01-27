@@ -1,12 +1,12 @@
 name: Linux Build
 
 on:
-  push:
-    branches:
-      - devwin
-  pull_request:
-    branches:
-      - devwin
+  # push:
+  #   branches:
+  #     - devwin
+  # pull_request:
+  #   branches:
+  #     - devwin
   workflow_call:
 
 jobs:
