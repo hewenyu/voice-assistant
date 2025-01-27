@@ -11,9 +11,11 @@ permissions:
 jobs:
   linux:
     uses: ./.github/workflows/linux.yml
+  windows:
+    uses: ./.github/workflows/windows.yml
 
   release:
-    needs: [linux]
+    needs: [linux, windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -24,11 +26,18 @@ jobs:
           name: voice-assistant-linux-x64
           path: artifacts
 
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: voice-assistant-UCRT64-Release.zip
+          path: artifacts
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
             artifacts/voice-assistant-linux-x64.tar.gz
+            artifacts/voice-assistant-UCRT64-Release.zip
           draft: false
           prerelease: false
           generate_release_notes: true 
