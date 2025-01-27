@@ -1,5 +1,34 @@
 cmake_minimum_required(VERSION 3.10)
-project(voice_assistant VERSION 1.0.0 LANGUAGES CXX)
+
+# 从环境变量或命令行参数获取版本号
+if(DEFINED ENV{TAG_VERSION})
+    set(VERSION_STRING $ENV{TAG_VERSION})
+elseif(DEFINED TAG_VERSION)
+    set(VERSION_STRING ${TAG_VERSION})
+else()
+    set(VERSION_STRING "1.0.0")  # 默认版本号
+endif()
+
+# 解析版本号字符串
+string(REGEX MATCH "^([0-9]+)\\.([0-9]+)\\.([0-9]+)" VERSION_MATCH "${VERSION_STRING}")
+if(VERSION_MATCH)
+    set(VERSION_MAJOR ${CMAKE_MATCH_1})
+    set(VERSION_MINOR ${CMAKE_MATCH_2})
+    set(VERSION_PATCH ${CMAKE_MATCH_3})
+else()
+    message(WARNING "Invalid version format: ${VERSION_STRING}, using default version")
+    set(VERSION_MAJOR 1)
+    set(VERSION_MINOR 0)
+    set(VERSION_PATCH 0)
+endif()
+
+project(voice_assistant 
+    VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}
+    LANGUAGES CXX
+)
+
+# 输出当前版本信息
+message(STATUS "Building version: ${PROJECT_VERSION}")
 
 # 启用测试
 enable_testing()
@@ -161,7 +190,6 @@ else()
         "${SHERPA_ONNX_LIB_DIR}/libsherpa-onnx-cxx-api.so"
         "${SHERPA_ONNX_LIB_DIR}/libcargs.so"
         "${SHERPA_ONNX_LIB_DIR}/libonnxruntime.so"
-        "${SHERPA_ONNX_LIB_DIR}/libonnxruntime_providers_shared.so"
         DESTINATION bin
     )
 endif()

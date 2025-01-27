@@ -77,11 +77,10 @@ jobs:
       run: |
         cd build
         cpack -G TGZ
-        mv voice-assistant-*.tar.gz ../voice-assistant-linux-x64.tar.gz
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v3
       with:
-        name: voice-assistant-linux-x64
-        path: voice-assistant-linux-x64.tar.gz 
-        retention-days: 3
+          name: voice-assistant-linux-x64.tar.gz
+          path: build/voice-assistant-*.tar.gz 
+          retention-days: 3
