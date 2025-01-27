@@ -23,18 +23,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Download Linux artifacts
-        uses: actions/download-artifact@v3
+      - name: Display structure of downloaded files
+        uses: actions/download-artifact@v4
         with:
-          name: voice-assistant-linux
           path: artifacts
-
-      - name: Download Windows artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: voice-assistant-windows
-          path: artifacts
-
-      - name: ls artifacts
-        run: |
-          ls artifacts
+        run: ls -R artifacts
