@@ -2,10 +2,13 @@
 #include <functiondiscoverykeys_devpkey.h>
 #include <iostream>
 #include <iomanip>
+#include <algorithm>
+#include <future>
 #include <psapi.h>
 #include <mmdeviceapi.h>
 #include <audioclient.h>
 #include <ksmedia.h>
+#include <sherpa-onnx/c-api/c-api.h>
 
 namespace windows_audio {
 
@@ -609,23 +612,38 @@ void WasapiCapture::process_audio_for_recognition(const std::vector<int16_t>& au
                         // lang
                         std::cout << "Language: " << result->lang << std::endl;
 
-                        // if (result->lang && translate_) {
-                        //     std::string language_code = std::string(result->lang).substr(2, 2);
-                        //     std::transform(language_code.begin(), language_code.end(), language_code.begin(), ::toupper);
-                        //     std::cout << "Language Code: " << language_code << std::endl;
+                        if (result->lang  && translate_) {
+                            std::string language_code = std::string(result->lang).substr(2, 2);
+                            for (char& c : language_code) {
+                                c = std::toupper(c);
+                            }
+                            // std::cout << "Language Code: " << language_code
+                            //           << std::endl;
 
-                        //     std::string target_lang = translate_->get_target_language();
-                        //     std::transform(target_lang.begin(), target_lang.end(), target_lang.begin(), ::toupper);
-                        //     std::cout << "Target Language: " << target_lang << std::endl;
-                            
-                        //     if (target_lang != language_code) {
-                        //         try {
-                        //             std::string translated_text = translate_->translate(result->text, language_code);
-                        //             std::cout << "Translated Text: " << translated_text << std::endl;
-                        //         } catch (const std::exception& e) {
-                        //             std::cerr << "Error translating text: " << e.what() << std::endl;
-                        //         }
-                        // }
+                            std::string target_lang_code = translate_->get_target_language();
+                            // std::cout << "Target Language: " <<
+                            // target_lang_code << std::endl;
+
+                            if (target_lang_code != language_code) {
+                                
+                                try {
+                                    // Create a future to run translation asynchronously
+                                    auto future = std::async(std::launch::async, [&]() {
+                                        return translate_->translate(result->text, language_code);
+                                    });
+
+                                    // Wait for translation with 1 second timeout
+                                    if (future.wait_for(std::chrono::seconds(1)) == std::future_status::ready) {
+                                        std::string translated_text = future.get();
+                                        std::cout << "Translated Text: " << translated_text << std::endl;
+                                    } else {
+                                        throw std::runtime_error("Translation timed out after 1 second");
+                                    }
+                                } catch (const std::exception& e) {
+                                    std::cerr << "Error translating text: " << e.what() << std::endl;
+                                }
+                            }
+                        }
                         std::cout << std::string(50, '-') << std::endl;
                     }
 

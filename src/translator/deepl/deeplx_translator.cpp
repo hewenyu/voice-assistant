@@ -23,6 +23,8 @@ DeepLXTranslator::DeepLXTranslator(const common::ModelConfig& config) {
     url_ = config.deeplx.url;
     token_ = config.deeplx.token;
     target_lang_ = config.deeplx.target_lang;
+    // target_lang_ 需要输出大写
+    std::transform(target_lang_.begin(), target_lang_.end(), target_lang_.begin(), ::toupper);
     enabled_ = config.deeplx.enabled;
     // Parse URL to get host, port, and path
     std::regex url_regex("^(https?://)?([^/:]+)(?::(\\d+))?(/.*)?$");
