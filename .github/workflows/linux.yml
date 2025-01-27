@@ -79,7 +79,7 @@ jobs:
         cpack -G TGZ
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
           name: voice-assistant-linux
           path: build/voice-assistant-*.tar.gz 
