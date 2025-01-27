@@ -2,11 +2,12 @@
 
 [English](README.md) | [中文](README_zh.md)
 
-基于 Linux 的语音助手，使用 PulseAudio 捕获应用程序音频，支持语音活动检测（VAD）、语音识别和实时翻译功能。
+一个支持 Windows 和 Linux 平台的语音助手，可以捕获应用程序音频，支持语音活动检测（VAD）、语音识别和实时翻译功能。
 
 ## 功能特点
 
-- 基于 PulseAudio 的应用程序音频捕获（Linux 平台）
+- 跨平台支持（Windows 和 Linux）
+- 应用程序音频捕获（Linux 使用 PulseAudio，Windows 使用 Windows Audio Session API）
 - 实时语音活动检测（VAD）
 - 使用 Sherpa-onnx 进行语音识别
 - 自动语言检测
@@ -16,18 +17,34 @@
 
 ## 依赖项
 
-- PulseAudio 开发库（`libpulse-dev`）- 仅限 Linux
+### Linux
+- PulseAudio 开发库（`libpulse-dev`）
 - Sherpa-onnx
 - C++17 编译器
 - CMake 3.10 或更高版本
 
+### Windows
+- Windows 10 或更高版本
+- Visual Studio 2019 或更高版本（支持 C++17）
+- CMake 3.10 或更高版本
+- Sherpa-onnx
+
 ## 构建
 
+### Linux
 ```bash
 mkdir -p build
 cd build
 cmake ..
 make
+```
+
+### Windows
+```powershell
+mkdir build
+cd build
+cmake -G "Visual Studio 16 2019" -A x64 ..
+cmake --build . --config Release
 ```
 
 ## 模型下载
@@ -136,7 +153,8 @@ Translated Text: <翻译文本>（仅当检测语言与目标语言不同时显�
 ## 实现细节
 
 ### 音频捕获
-- 使用 PulseAudio 的线程化主循环实现高效音频捕获
+- Linux：使用 PulseAudio 的线程化主循环实现高效音频捕获
+- Windows：使用 Windows Audio Session API (WASAPI) 实现低延迟音频捕获
 - 自动格式转换：
   - 立体声转单声道
   - 采样率转换为 16kHz
