@@ -64,6 +64,29 @@ target_include_directories(audio_capture
     ${SHERPA_ONNX_INCLUDE_DIR}
 )
 
+# 添加core库
+add_library(core
+    core/message_bus.cpp
+)
+
+target_include_directories(core
+    PUBLIC
+    ${CMAKE_SOURCE_DIR}/src
+)
+
+# 设置C++标准
+set_target_properties(core PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+)
+
+# 链接线程库
+find_package(Threads REQUIRED)
+target_link_libraries(core
+    PRIVATE
+    Threads::Threads
+)
+
 # 平台特定配置
 if(WIN32)
     # Windows 特定链接
