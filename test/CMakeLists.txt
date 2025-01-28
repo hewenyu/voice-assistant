@@ -4,19 +4,20 @@ cmake_minimum_required(VERSION 3.10)
 # 启用测试
 enable_testing()
 
-# 查找GTest包（包含GMock）
+# 查找GTest包
 find_package(GTest REQUIRED)
 
-# 添加测试可执行文件
+# 添加音频捕获测试
 add_executable(test_audio_capture test_audio_capture.cpp)
 add_executable(test_message_bus test_message_bus.cpp)
 
 # 链接测试库
 target_link_libraries(test_audio_capture
     PRIVATE
+    audio_capture
+    core
     GTest::GTest
     GTest::Main
-    audio_capture
 )
 
 target_link_libraries(test_message_bus
@@ -31,6 +32,7 @@ target_link_libraries(test_message_bus
 target_include_directories(test_audio_capture
     PRIVATE
     ${CMAKE_SOURCE_DIR}/src
+    ${GTEST_INCLUDE_DIRS}
 )
 
 target_include_directories(test_message_bus
@@ -38,7 +40,7 @@ target_include_directories(test_message_bus
     ${CMAKE_SOURCE_DIR}/src
 )
 
-# 添加测试
+# 添加到CTest
 add_test(NAME test_audio_capture COMMAND test_audio_capture)
 add_test(NAME test_message_bus COMMAND test_message_bus)
 

@@ -1,10 +1,11 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 #include <functional>
-#include <common/model_config.h>
-#include <sherpa-onnx/c-api/c-api.h>
-#include <translator/translator.h>
+#include <core/message_bus.h>
+#include <core/message_types.h>
+#include "audio_format.h"
 
 namespace audio {
 
@@ -24,17 +25,31 @@ public:
     // List available applications
     virtual void list_applications() = 0;
 
+    // Get current audio format
+    virtual AudioFormat get_audio_format() const = 0;
+
+    // Set message bus for audio data publishing
+    virtual void set_message_bus(std::shared_ptr<core::MessageBus> message_bus) {
+        message_bus_ = message_bus;
+    }
+
     // Factory method to create audio capture instance
     static std::unique_ptr<IAudioCapture> CreateAudioCapture();
 
-    // set model recognizer
-    virtual void set_model_recognizer(const SherpaOnnxOfflineRecognizer* recognizer) = 0;
+protected:
+    // Helper method to publish audio data
+    void publish_audio_data(const std::vector<float>& data, core::AudioMessage::Status status) {
+        if (message_bus_) {
+            auto msg = std::make_shared<core::AudioMessage>(
+                data,
+                get_audio_format().sample_rate,
+                status
+            );
+            message_bus_->publish(msg);
+        }
+    }
 
-    // set model vad
-    virtual void set_model_vad(SherpaOnnxVoiceActivityDetector* vad, const int window_size) = 0;
-
-    // set translate
-    virtual void set_translate(const translator::ITranslator* translate) = 0;
+    std::shared_ptr<core::MessageBus> message_bus_;
 };
 
 } // namespace audio 

@@ -132,43 +132,40 @@ int main(int argc, char* argv[]) {
         // Create audio capture instance
         auto audio_capture = audio::IAudioCapture::CreateAudioCapture();
         if (!audio_capture) {
-            std::cerr << "Failed to create audio capture instance." << std::endl;
+            std::cerr << "Failed to create audio capture instance" << std::endl;
             return 1;
         }
 
+        // Initialize audio capture
         if (!audio_capture->initialize()) {
-            std::cerr << "Failed to initialize audio capture." << std::endl;
+            std::cerr << "Failed to initialize audio capture" << std::endl;
             return 1;
         }
 
-        // create recognizer
+        // Create and set message bus
+        auto message_bus = std::make_shared<core::MessageBus>();
+        audio_capture->set_message_bus(message_bus);
+
+        // Create recognizer
         auto recognizer = recognizer::ModelFactory::CreateModel(model_config);
         if (!recognizer) {
             std::cerr << "Failed to create speech recognizer." << std::endl;
             return 1;
         }
 
-        // create VAD
+        // Create VAD
         auto vad = recognizer::ModelFactory::CreateVoiceActivityDetector(model_config);
         if (!vad) {
             std::cerr << "Failed to create VAD." << std::endl;
             return 1;
         }
 
-        // Set VAD first
-        audio_capture->set_model_vad(vad, model_config.vad.window_size);
-        
-        // Then set recognizer
-        audio_capture->set_model_recognizer(recognizer);
-
-        // create translator
+        // Create translator
         auto translator = translator::CreateTranslator(translator::TranslatorType::DeepLX, model_config);
         if (!translator) {
             std::cerr << "Failed to create translator." << std::endl;
             return 1;
         }
-        
-        audio_capture->set_translate(translator.get());
 
         if (source_index < 0) {
             std::cerr << "Please specify a valid source index with -s option." << std::endl;
@@ -181,7 +178,7 @@ int main(int argc, char* argv[]) {
 
         // Start audio capture
         if (!audio_capture->start_recording_application(source_index)) {
-            std::cerr << "Failed to start audio capture." << std::endl;
+            std::cerr << "Failed to start recording" << std::endl;
             return 1;
         }
 

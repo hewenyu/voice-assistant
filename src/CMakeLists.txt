@@ -40,6 +40,7 @@ target_include_directories(voice_assistant
     ${CMAKE_CURRENT_SOURCE_DIR}/common
     ${CMAKE_CURRENT_SOURCE_DIR}/recognizer
     ${CMAKE_CURRENT_SOURCE_DIR}/translator
+    ${CMAKE_CURRENT_SOURCE_DIR}/core
     ${SHERPA_ONNX_INCLUDE_DIR}
 )
 
@@ -61,7 +62,14 @@ target_compile_definitions(audio_capture
 target_include_directories(audio_capture
     PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${SHERPA_ONNX_INCLUDE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/audio
+    ${CMAKE_CURRENT_SOURCE_DIR}/core
+)
+
+# 设置音频捕获库的链接依赖
+target_link_libraries(audio_capture
+    PRIVATE
+    core
 )
 
 # 添加core库
