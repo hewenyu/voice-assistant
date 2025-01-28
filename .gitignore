@@ -77,3 +77,5 @@ src-back/
 
 
 dep/sherpa-onnx-*
+
+.cache/

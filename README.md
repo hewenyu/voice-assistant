@@ -2,11 +2,12 @@
 
 [English](README.md) | [中文](README_zh.md)
 
-A Linux-based voice assistant that captures application audio using PulseAudio, performs Voice Activity Detection (VAD), Speech Recognition, and supports real-time translation.
+A voice assistant that captures application audio, performs Voice Activity Detection (VAD), Speech Recognition, and supports real-time translation. Supports both Windows and Linux platforms.
 
 ## Features
 
-- Application-specific audio capture using PulseAudio on Linux
+- Cross-platform support (Windows and Linux)
+- Application-specific audio capture (using PulseAudio on Linux, Windows Audio Session API on Windows)
 - Real-time Voice Activity Detection (VAD)
 - Speech recognition using Sherpa-onnx
 - Automatic language detection
@@ -16,18 +17,34 @@ A Linux-based voice assistant that captures application audio using PulseAudio, 
 
 ## Dependencies
 
-- PulseAudio development library (`libpulse-dev`) - Linux only
+### Linux
+- PulseAudio development library (`libpulse-dev`)
 - Sherpa-onnx
 - C++17 compiler
 - CMake 3.10 or higher
 
+### Windows
+- Windows 10 or higher
+- Visual Studio 2019 or higher with C++17 support
+- CMake 3.10 or higher
+- Sherpa-onnx
+
 ## Building
 
+### Linux
 ```bash
 mkdir -p build
 cd build
 cmake ..
 make
+```
+
+### Windows
+```powershell
+mkdir build
+cd build
+cmake -G "Visual Studio 16 2019" -A x64 ..
+cmake --build . --config Release
 ```
 
 ## Model Download
@@ -136,7 +153,8 @@ Translated Text: <translated text> (if language differs from target)
 ## Implementation Details
 
 ### Audio Capture
-- Uses PulseAudio's threaded mainloop for efficient audio capture
+- Linux: Uses PulseAudio's threaded mainloop for efficient audio capture
+- Windows: Uses Windows Audio Session API (WASAPI) for low-latency audio capture
 - Automatic format conversion:
   - Stereo to mono conversion
   - Sample rate conversion to 16kHz

@@ -93,6 +93,21 @@ if(WIN32)
         ksuser
         avrt
     )
+
+    # 复制运行时依赖到bin目录
+    add_custom_command(TARGET voice_assistant POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${MSYS64_ROOT}/ucrt64/bin/libyaml-cpp.dll"
+            "${MSYS64_ROOT}/ucrt64/bin/libgcc_s_seh-1.dll"
+            "${MSYS64_ROOT}/ucrt64/bin/libstdc++-6.dll"
+            "${MSYS64_ROOT}/ucrt64/bin/libwinpthread-1.dll"
+            "${SHERPA_ONNX_LIB_DIR}/sherpa-onnx-c-api.dll"
+            "${SHERPA_ONNX_LIB_DIR}/sherpa-onnx-cxx-api.dll"
+            "${SHERPA_ONNX_LIB_DIR}/cargs.dll"
+            "${SHERPA_ONNX_LIB_DIR}/onnxruntime.dll"
+            "${SHERPA_ONNX_LIB_DIR}/onnxruntime_providers_shared.dll"
+            $<TARGET_FILE_DIR:voice_assistant>
+    )
 else()
     # Linux 特定链接
     target_link_libraries(voice_assistant
@@ -120,17 +135,33 @@ endif()
 # 设置输出目录
 set_target_properties(audio_capture PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
     PDB_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
 # 安装配置
 install(TARGETS voice_assistant audio_capture
     RUNTIME DESTINATION bin
-    LIBRARY DESTINATION bin
-    ARCHIVE DESTINATION bin
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
 )
+
+# 安装依赖库
+if(WIN32)
+    install(FILES
+        "${MSYS64_ROOT}/ucrt64/bin/libyaml-cpp.dll"
+        "${MSYS64_ROOT}/ucrt64/bin/libgcc_s_seh-1.dll"
+        "${MSYS64_ROOT}/ucrt64/bin/libstdc++-6.dll"
+        "${MSYS64_ROOT}/ucrt64/bin/libwinpthread-1.dll"
+        "${SHERPA_ONNX_LIB_DIR}/sherpa-onnx-c-api.dll"
+        "${SHERPA_ONNX_LIB_DIR}/sherpa-onnx-cxx-api.dll"
+        "${SHERPA_ONNX_LIB_DIR}/cargs.dll"
+        "${SHERPA_ONNX_LIB_DIR}/onnxruntime.dll"
+        "${SHERPA_ONNX_LIB_DIR}/onnxruntime_providers_shared.dll"
+        DESTINATION bin
+    )
+endif()
 
 # 安装配置文件
 install(FILES 
