@@ -39,6 +39,7 @@ target_include_directories(voice_assistant
     ${CMAKE_CURRENT_SOURCE_DIR}/audio
     ${CMAKE_CURRENT_SOURCE_DIR}/common
     ${CMAKE_CURRENT_SOURCE_DIR}/recognizer
+    ${CMAKE_CURRENT_SOURCE_DIR}/recognizer_data
     ${CMAKE_CURRENT_SOURCE_DIR}/translator
     ${CMAKE_CURRENT_SOURCE_DIR}/core
     ${SHERPA_ONNX_INCLUDE_DIR}
