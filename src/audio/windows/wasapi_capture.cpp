@@ -632,12 +632,12 @@ void WasapiCapture::process_audio_for_recognition(const std::vector<int16_t>& au
                                         return translate_->translate(result->text, language_code);
                                     });
 
-                                    // Wait for translation with 1 second timeout
-                                    if (future.wait_for(std::chrono::seconds(1)) == std::future_status::ready) {
+                                    // Wait for translation with 3 second timeout
+                                    if (future.wait_for(std::chrono::seconds(3)) == std::future_status::ready) {
                                         std::string translated_text = future.get();
                                         std::cout << "Translated Text: " << translated_text << std::endl;
                                     } else {
-                                        throw std::runtime_error("Translation timed out after 1 second");
+                                        throw std::runtime_error("Translation timed out after 3 seconds");
                                     }
                                 } catch (const std::exception& e) {
                                     std::cerr << "Error translating text: " << e.what() << std::endl;
