@@ -1,7 +1,52 @@
-# Add test executables
-add_executable(test_audio_capture 
+# 测试模块的 CMakeLists.txt
+cmake_minimum_required(VERSION 3.10)
+
+# 启用测试
+enable_testing()
+
+# 查找 GTest 包
+find_package(GTest REQUIRED)
+
+# 音频模块测试
+add_executable(test_audio_capture
     test_audio_capture.cpp
 )
+
+target_link_libraries(test_audio_capture
+    PRIVATE
+    GTest::GTest
+    GTest::Main
+    core_audio
+)
+
+# 语音识别模块测试
+add_executable(test_recognizer
+    test_recognizer.cpp
+)
+
+target_link_libraries(test_recognizer
+    PRIVATE
+    GTest::GTest
+    GTest::Main
+    core_recognizer
+)
+
+# 翻译模块测试
+add_executable(test_translator
+    test_translator.cpp
+)
+
+target_link_libraries(test_translator
+    PRIVATE
+    GTest::GTest
+    GTest::Main
+    core_translator
+)
+
+# 添加测试
+add_test(NAME test_audio_capture COMMAND test_audio_capture)
+add_test(NAME test_recognizer COMMAND test_recognizer)
+add_test(NAME test_translator COMMAND test_translator)
 
 # Set include directories
 target_include_directories(test_audio_capture
