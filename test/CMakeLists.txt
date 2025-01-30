@@ -1,6 +1,12 @@
 # 测试模块的 CMakeLists.txt
 cmake_minimum_required(VERSION 3.10)
 
+# 设置包含目录
+include_directories(
+    ${CMAKE_SOURCE_DIR}/src
+    ${SHERPA_ONNX_INCLUDE_DIR}
+)
+
 # 启用测试
 enable_testing()
 
@@ -8,94 +14,66 @@ enable_testing()
 find_package(GTest REQUIRED)
 
 # 音频模块测试
-add_executable(test_audio_capture
+add_executable(test_core_audio
     test_audio_capture.cpp
 )
 
-target_link_libraries(test_audio_capture
+target_link_libraries(test_core_audio
     PRIVATE
+    core_audio
     GTest::GTest
     GTest::Main
-    core_audio
 )
 
 # 语音识别模块测试
-add_executable(test_recognizer
+add_executable(test_core_recognizer
     test_recognizer.cpp
 )
 
-target_link_libraries(test_recognizer
+target_link_libraries(test_core_recognizer
     PRIVATE
+    core_recognizer
     GTest::GTest
     GTest::Main
-    core_recognizer
 )
 
 # 翻译模块测试
-add_executable(test_translator
+add_executable(test_core_translator
     test_translator.cpp
 )
 
-target_link_libraries(test_translator
+target_link_libraries(test_core_translator
     PRIVATE
+    core_translator
     GTest::GTest
     GTest::Main
-    core_translator
 )
 
 # 添加测试
-add_test(NAME test_audio_capture COMMAND test_audio_capture)
-add_test(NAME test_recognizer COMMAND test_recognizer)
-add_test(NAME test_translator COMMAND test_translator)
-
-# Set include directories
-target_include_directories(test_audio_capture
-    PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-    ${SHERPA_ONNX_INCLUDE_DIR}
-)
-
-# Link with audio capture library
-target_link_libraries(test_audio_capture
-    PRIVATE
-    audio_capture
-    ${YAML_CPP_LIBRARIES}
-)
+add_test(NAME test_core_audio COMMAND test_core_audio)
+add_test(NAME test_core_recognizer COMMAND test_core_recognizer)
+add_test(NAME test_core_translator COMMAND test_core_translator)
 
 # Windows 特定配置
 if(WIN32)
-    target_link_libraries(test_audio_capture
-        PRIVATE
-        ole32
-        oleaut32
-        winmm
-        ksuser
-        avrt
+    # 设置运行时路径
+    set_tests_properties(
+        test_core_audio
+        test_core_recognizer
+        test_core_translator
+        PROPERTIES
+        ENVIRONMENT "PATH=${CMAKE_BINARY_DIR}/bin;$<TARGET_FILE_DIR:test_core_audio>;$ENV{PATH}"
     )
-
-    # Windows 测试配置
-    add_test(NAME test_audio_capture 
-        COMMAND ${CMAKE_COMMAND} -E env 
-            "PATH=${CMAKE_BINARY_DIR}/bin;$<TARGET_FILE_DIR:test_audio_capture>;$ENV{PATH}" 
-            $<TARGET_FILE:test_audio_capture>
-    )
-# Linux 特定配置
 else()
-    target_link_libraries(test_audio_capture
-        PRIVATE
-        ${PULSEAUDIO_LIBRARIES}
+    # Linux 特定配置
+    set_tests_properties(
+        test_core_audio
+        test_core_recognizer
+        test_core_translator
+        PROPERTIES
+        ENVIRONMENT "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/lib:$<TARGET_FILE_DIR:test_core_audio>:$ENV{LD_LIBRARY_PATH}"
     )
+endif()
 
-    # Linux 测试配置
-    add_test(NAME test_audio_capture 
-        COMMAND ${CMAKE_COMMAND} -E env 
-            "PATH=${CMAKE_BINARY_DIR}/bin;$<TARGET_FILE_DIR:test_audio_capture>;$ENV{PATH}"
-            "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/bin:$<TARGET_FILE_DIR:test_audio_capture>:$ENV{LD_LIBRARY_PATH}"
-            $<TARGET_FILE:test_audio_capture>
-    )
-endif() 
-
-# 设置测试属性
-set_tests_properties(test_audio_capture PROPERTIES
-    ENVIRONMENT "VOICE_ASSISTANT_TEST=1"
-)
+# 复制测试数据
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/test_data DESTINATION ${CMAKE_CURRENT_BINARY_DIR})

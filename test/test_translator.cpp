@@ -3,6 +3,7 @@
 #include <thread>
 #include <chrono>
 #include <future>
+#include <algorithm>
 
 using namespace core::translator;
 

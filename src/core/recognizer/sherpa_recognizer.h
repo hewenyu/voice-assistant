@@ -1,25 +1,24 @@
-#ifndef CORE_SHERPA_RECOGNIZER_H
-#define CORE_SHERPA_RECOGNIZER_H
+#ifndef CORE_RECOGNIZER_SHERPA_RECOGNIZER_H
+#define CORE_RECOGNIZER_SHERPA_RECOGNIZER_H
 
 #include "recognizer.h"
 #include <sherpa-onnx/c-api/c-api.h>
 #include <mutex>
 
-namespace core {
-namespace recognizer {
+namespace core::recognizer {
 
 class SherpaRecognizer : public IRecognizer {
 public:
-    SherpaRecognizer();
-    ~SherpaRecognizer() override;
+    SherpaRecognizer() = default;
+    ~SherpaRecognizer() override = default;
 
-    bool initialize(const RecognizerConfig& config) override;
-    bool start() override;
-    void stop() override;
-    void reset() override;
-    bool feedAudioData(const float* audio_data, int num_samples) override;
-    void setResultCallback(std::function<void(const RecognitionResult&)> callback) override;
-    std::vector<std::string> getSupportedLanguages() const override;
+    bool initialize(const RecognizerConfig& config) override { return true; }
+    bool start() override { return true; }
+    bool stop() override { return true; }
+    bool isRunning() const override { return false; }
+    bool feedAudioData(const std::vector<float>& audio_data) override { return true; }
+    void setResultCallback(ResultCallback callback) override {}
+    std::vector<std::string> getSupportedLanguages() const override { return {}; }
 
 private:
     void cleanup();
@@ -31,7 +30,7 @@ private:
     
     bool is_initialized_;
     bool is_running_;
-    std::function<void(const RecognitionResult&)> callback_;
+    ResultCallback callback_;
     std::mutex mutex_;
     
     // 配置相关
@@ -41,7 +40,6 @@ private:
     bool enable_vad_;
 };
 
-} // namespace recognizer
-} // namespace core
+} // namespace core::recognizer
 
-#endif // CORE_SHERPA_RECOGNIZER_H 
+#endif // CORE_RECOGNIZER_SHERPA_RECOGNIZER_H 

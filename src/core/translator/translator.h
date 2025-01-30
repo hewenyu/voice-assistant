@@ -1,13 +1,12 @@
-#ifndef CORE_TRANSLATOR_H
-#define CORE_TRANSLATOR_H
+#ifndef CORE_TRANSLATOR_TRANSLATOR_H
+#define CORE_TRANSLATOR_TRANSLATOR_H
 
 #include <string>
 #include <memory>
 #include <vector>
 #include <functional>
 
-namespace core {
-namespace translator {
+namespace core::translator {
 
 // 翻译结果结构体
 struct TranslationResult {
@@ -27,6 +26,8 @@ struct TranslatorConfig {
     int timeout_ms;               // 超时时间（毫秒）
 };
 
+using ResultCallback = std::function<void(const TranslationResult&)>;
+
 // 翻译器接口类
 class ITranslator {
 public:
@@ -45,7 +46,7 @@ public:
     virtual void translateAsync(const std::string& text,
                               const std::string& from_lang,
                               const std::string& to_lang,
-                              std::function<void(const TranslationResult&)> callback) = 0;
+                              ResultCallback callback) = 0;
 
     // 检测语言
     virtual std::string detectLanguage(const std::string& text) = 0;
@@ -61,7 +62,6 @@ public:
 // 创建翻译器实例
 std::unique_ptr<ITranslator> createTranslator();
 
-} // namespace translator
-} // namespace core
+} // namespace core::translator
 
-#endif // CORE_TRANSLATOR_H 
+#endif // CORE_TRANSLATOR_TRANSLATOR_H 

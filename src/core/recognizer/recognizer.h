@@ -1,13 +1,12 @@
-#ifndef CORE_RECOGNIZER_H
-#define CORE_RECOGNIZER_H
+#ifndef CORE_RECOGNIZER_RECOGNIZER_H
+#define CORE_RECOGNIZER_RECOGNIZER_H
 
 #include <string>
 #include <memory>
 #include <functional>
 #include <vector>
 
-namespace core {
-namespace recognizer {
+namespace core::recognizer {
 
 // 识别结果结构体
 struct RecognitionResult {
@@ -19,10 +18,12 @@ struct RecognitionResult {
 // 识别器配置结构体
 struct RecognizerConfig {
     std::string model_path;    // 模型路径
-    std::string lang;          // 语言
+    std::string language;      // 语言
     int sample_rate;           // 采样率
     bool enable_vad;           // 是否启用VAD
 };
+
+using ResultCallback = std::function<void(const RecognitionResult&)>;
 
 // 语音识别接口类
 class IRecognizer {
@@ -45,16 +46,18 @@ public:
     virtual bool feedAudioData(const float* audio_data, int num_samples) = 0;
 
     // 设置识别结果回调
-    virtual void setResultCallback(std::function<void(const RecognitionResult&)> callback) = 0;
+    virtual void setResultCallback(ResultCallback callback) = 0;
 
     // 获取支持的语言列表
     virtual std::vector<std::string> getSupportedLanguages() const = 0;
+
+    // 获取识别器运行状态
+    virtual bool isRunning() const = 0;
 };
 
 // 创建识别器实例
 std::unique_ptr<IRecognizer> createRecognizer();
 
-} // namespace recognizer
-} // namespace core
+} // namespace core::recognizer
 
-#endif // CORE_RECOGNIZER_H 
+#endif // CORE_RECOGNIZER_RECOGNIZER_H 
