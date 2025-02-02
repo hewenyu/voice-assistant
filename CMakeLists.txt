@@ -49,7 +49,7 @@ elseif(CMAKE_HOST_WIN32)
     # Windows 平台配置
     set(PLATFORM_NAME "windows")
     if(NOT DEFINED MSYS64_ROOT)
-        set(MSYS64_ROOT "D:/msys64")
+        set(MSYS64_ROOT "C:/msys64")
     endif()
     message(STATUS "Using MSYS2 root: ${MSYS64_ROOT}")
 endif()
