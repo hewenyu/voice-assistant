@@ -79,3 +79,6 @@ src-back/
 dep/sherpa-onnx-*
 
 .cache/
+
+
+models/config.yaml
