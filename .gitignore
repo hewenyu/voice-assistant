@@ -70,3 +70,6 @@ build.sh
 run.sh
 
 **/output.wav
+
+
+dep/sherpa-onnx-*
